@@ -39,5 +39,5 @@ This code supports version 1.1 of the BMF format, which has the following limita
 
 2. The colors do not support an alpha channel; every pixel is either opaque or fully transparent.
 
-I hope to define an updated version of the BMF format that removes these limitations, but for now that's the story.
+I hope to define an updated version of the BMF format that removes these limitations, but these apply for now.
 
