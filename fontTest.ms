@@ -73,16 +73,14 @@ Font.makeCharImage = function(c)
 	d = self.charData(c)
 	if d == null then return null
 	img = Image.create(d.width, d.height, color.clear)
-	x = 0 + d.relX
-	y = img.height - d.relY
 	if d.width and d.height then
 		i = 0
-		for bitmapY in range(0, d.height - 1)
+		for bitmapY in range(d.height - 1)
 			for bitmapX in range(0, d.width - 1)
 				c = d.colors[i]
 				i = i + 1
 				if not c then continue
-				img.setPixel x + bitmapX, y - bitmapY, self.palette[c]
+				img.setPixel bitmapX, bitmapY, self.palette[c]
 			end for
 		end for		
 	end if
@@ -104,7 +102,7 @@ Font.renderChar = function(c, x=480, y=320)
 	d = self.charData(c)
 	if d == null then return 0
 	if d.image == null then d.image = self.makeCharImage(c)
-	gfx.drawImage d.image, x + d.relX, y - d.relY
+	gfx.drawImage d.image, x, y
 	return d.shift
 end function
 
@@ -123,7 +121,7 @@ f.print "Hello world!", 20, 500
 // Get a character image, and make a Sprite out of it
 spr = new Sprite
 spr.image = f.getCharImage("R")
-spr.x = 400
+spr.x = 500
 spr.y = 500
 spr.scale = 3
 spr.rotation = 30
