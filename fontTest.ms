@@ -14,11 +14,11 @@ Font.load = function(path)
 	data.littleEndian = true
 	vers = data.byte(4)
 	print "Font version: " + floor(vers/16) + "." + vers % 16
-	lineHeight = data.byte(5)
-	sizeOver = data.byte(6)
-	sizeUnder = data.byte(7)
-	addSpace = data.byte(8)
-	sizeInner = data.byte(9)
+	f.lineHeight = data.sbyte(5)
+	f.sizeOver = data.sbyte(6)
+	f.sizeUnder = data.sbyte(7)
+	f.addSpace = data.sbyte(8)
+	f.sizeInner = data.sbyte(9)
 	palSize = data.byte(16)
 	f.palette = [null]  // (color 0 is transparent or don't draw)
 	for i in range(0, palSize-1)
@@ -102,13 +102,16 @@ Font.renderChar = function(c, x=480, y=320)
 	d = self.charData(c)
 	if d == null then return 0
 	if d.image == null then d.image = self.makeCharImage(c)
+	x = x + d.relX
+	y = y - self.sizeOver - d.relY - d.image.height
 	gfx.drawImage d.image, x, y
+	//gfx.drawRect x, y, d.image.width, d.image.height, color.yellow
 	return d.shift
 end function
 
 Font.print = function(s, x=20, y=320)
 	for c in s
-		x = x + self.renderChar(c, x, y)
+		x = x + self.renderChar(c, x, y) + self.addSpace
 	end for
 end function
 
@@ -127,3 +130,8 @@ spr.scale = 3
 spr.rotation = 30
 display(4).sprites.push spr
 
+text.row = 15
+g = Font.load("fonts/ari14.bmf")
+g.charData(" ").shift = 6  // (how to tweak a font)
+g.charData("w").shift = 13
+g.print "Howdy world!", 100, 400
