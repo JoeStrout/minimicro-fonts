@@ -5,6 +5,27 @@ Font = {}
 Font.data = null
 Font.chars = null   // key: character; value: charData map
 
+// Helper function to load one character into the given
+// charData map.  Return the next data position after
+// the character has been read (i.e., position of next char).
+Font.loadOneChar = function(data, pos, charData)
+	charData.width = data.byte(pos)
+	charData.height = data.byte(pos+1)
+	charData.relX = data.byte(pos+2)
+	charData.relY = data.byte(pos+3)
+	charData.shift = data.byte(pos+4)
+	charData.colors = []
+	charData.image = null
+	pos = pos + 5
+	bytes = charData.width * charData.height
+	if bytes then
+		for i in range(0, bytes-1)
+			charData.colors.push data.byte(pos+i)
+		end for
+	end if
+	return pos + bytes
+end function	
+
 Font.load = function(path)
 	data = file.loadRaw(path)
 	if data == null then return null
@@ -20,7 +41,7 @@ Font.load = function(path)
 	f.addSpace = data.sbyte(8)
 	f.sizeInner = data.sbyte(9)
 	palSize = data.byte(16)
-	f.palette = [null]  // (color 0 is transparent or don't draw)
+	f.palette = []
 	for i in range(0, palSize-1)
 		f.palette.push color.rgb(data.byte(17+i*3)*4, data.byte(18+i*3)*4, data.byte(19+i*3)*4)
 	end for
@@ -31,30 +52,16 @@ Font.load = function(path)
 	numChars = data.short(pos)
 	pos = pos + 2
 	print numChars + " characters"
-	
-	charIdx = 0
-	while charIdx < numChars
+
+	for i in range(1, numChars)
 		// Read one character
 		charData = {}
 		charData.charCode = data.byte(pos)
-		charData.width = data.byte(pos+1)
-		charData.height = data.byte(pos+2)
-		charData.relX = data.byte(pos+3)
-		charData.relY = data.byte(pos+4)
-		charData.shift = data.byte(pos+5)
-		charData.colors = []
-		charData.image = null
-		pos = pos + 6
-		bytes = charData.width * charData.height
-		if bytes then
-			for i in range(0, bytes-1)
-				charData.colors.push data.byte(pos+i)
-			end for
-		end if
-		pos = pos + bytes
+		pos = pos + 1
+		pos = f.loadOneChar(data, pos, charData)
+
 		f.chars[char(charData.charCode)] = charData
-		charIdx = charIdx + 1
-	end while
+	end for
 	return f
 end function
 
@@ -80,7 +87,7 @@ Font.makeCharImage = function(c)
 				c = d.colors[i]
 				i = i + 1
 				if not c then continue
-				img.setPixel bitmapX, bitmapY, self.palette[c]
+				img.setPixel bitmapX, bitmapY, self.palette[c-1]
 			end for
 		end for		
 	end if
