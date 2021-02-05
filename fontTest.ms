@@ -1,5 +1,3 @@
-clear
-clear
 
 Font = {}
 Font.data = null
@@ -40,6 +38,12 @@ Font.load = function(path)
 	f.sizeUnder = data.sbyte(7)
 	f.addSpace = data.sbyte(8)
 	f.sizeInner = data.sbyte(9)
+	f.alphaBits = 0
+	f.numPalettes = 1
+	if vers >= 1.2 then
+		f.alphaBits = data.byte(12)
+		f.numPalettes = data.byte(13) + 1
+	end if
 	palSize = data.byte(16)
 	f.palette = []
 	for i in range(0, palSize-1)
@@ -62,6 +66,7 @@ Font.load = function(path)
 
 		f.chars[char(charData.charCode)] = charData
 	end for
+	// ToDo: read non-ASCII characters too
 	return f
 end function
 
@@ -80,6 +85,9 @@ Font.makeCharImage = function(c)
 	d = self.charData(c)
 	if d == null then return null
 	img = Image.create(d.width, d.height, color.clear)
+	clrRange = 2^(8 - self.alphaBits)
+	alphaScale = 255/(2^self.alphaBits - 1)
+	baseColor = self.palette[0]
 	if d.width and d.height then
 		i = 0
 		for bitmapY in range(d.height - 1)
@@ -87,7 +95,13 @@ Font.makeCharImage = function(c)
 				c = d.colors[i]
 				i = i + 1
 				if not c then continue
-				img.setPixel bitmapX, bitmapY, self.palette[c-1]
+				if self.alphaBits then
+					a = floor(c / clrRange) * alphaScale
+					pixelColor = baseColor + hex2(a)
+				else
+					pixelColor = self.palette[c-1]
+				end if
+				img.setPixel bitmapX, bitmapY, pixelColor
 			end for
 		end for		
 	end if
@@ -122,23 +136,36 @@ Font.print = function(s, x=20, y=320)
 	end for
 end function
 
-// Load a font
-f = Font.load("fonts/ming.bmf")
+Font.width = function(s)
+	sum = 0
+	for c in s
+		d = self.charData(c)
+		sum = sum + d.shift
+	end for
+	return sum
+end function
 
-// Print a string in that font to gfx
-f.print "Hello world!", 20, 500
+if locals == globals then
+	clear
+	
+	// Load a font
+	f = Font.load("fonts/ming.bmf")
 
-// Get a character image, and make a Sprite out of it
-spr = new Sprite
-spr.image = f.getCharImage("R")
-spr.x = 500
-spr.y = 500
-spr.scale = 3
-spr.rotation = 30
-display(4).sprites.push spr
+	// Print a string in that font to gfx
+	f.print "Hello world!", 20, 500
 
-text.row = 15
-g = Font.load("fonts/ari14.bmf")
-g.charData(" ").shift = 6  // (how to tweak a font)
-g.charData("w").shift = 13
-g.print "Howdy world!", 100, 400
+	// Get a character image, and make a Sprite out of it
+	spr = new Sprite
+	spr.image = f.getCharImage("R")
+	spr.x = 500
+	spr.y = 500
+	spr.scale = 3
+	spr.rotation = 30
+	display(4).sprites.push spr
+
+	text.row = 15
+	g = Font.load("fonts/arb22v12.bmf")
+	//g.charData(" ").shift = 6  // (how to tweak a font)
+	//g.charData("w").shift = 13
+	g.print "Howdy world!", 100, 400
+end if
