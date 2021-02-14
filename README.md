@@ -12,11 +12,13 @@ It also includes some sample font files that I believe to be in the public domai
 
 Use this code with [Mini Micro](https://miniscript.org/MiniMicro).  Mini Micro is a fun, free, retro-style virtual computer based on [MiniScript](https://miniscript.org/), which is itself a clean, simple, modern scripting language.
 
-Load up `fontTest.ms` to see the code in action.  Sample usage:
+Place the bmfFonts.ms file somewhere in your import path (the current working directory will do; /usr/lib is also a good place).  Then use `import "bmfFonts"` to load the bmfFonts module, and `bmfFonts.Font.load` to load a font.
 
 ```
+import "bmfFonts"
+
 // Load a font
-f = Font.load("fonts/ming.bmf")
+f = bmfFonts.Font.load("fonts/ming.bmf")
 
 // Print a string in that font to gfx
 f.print "Hello world!", 20, 500
@@ -24,21 +26,20 @@ f.print "Hello world!", 20, 500
 // Get a character image, and make a Sprite out of it
 spr = new Sprite
 spr.image = f.getCharImage("R")
-spr.x = 400
+spr.x = 600
 spr.y = 500
 spr.scale = 3
 spr.rotation = 30
 display(4).sprites.push spr
 ```
 
-## Limitations
+If you run `bmfFonts.demo` (or load and run the module directly instead of using `import`), it will look for the fonts folder, and draw a string with each one.  The result should look something like this:
 
-This code supports version 1.1 of the BMF format, which has the following limitations:
+![bmfFonts demo](screenshot.png)
 
-1. It only supports characters up to char(255), and even within that range, the meaning of characters above char(127) is ill-defined.  No Unicode support.
+## BMF Version Support
 
-2. The colors do not support an alpha channel; every pixel is either opaque or fully transparent.
+This code supports both version 1.1 and version 1.2 of the BMF format.  Version 1.2 is a recent but significant upgrade, adding support for non-ASCII Unicode characters, kerning, and an alpha channel for anti-aliased fonts.
 
-I'm currently in discussions with the creator of the BMF format to possibly remove these limitations, but for now they still apply.
 
 
