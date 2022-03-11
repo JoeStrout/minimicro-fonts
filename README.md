@@ -33,7 +33,9 @@ spr.rotation = 30
 display(4).sprites.push spr
 ```
 
-If you run `bmfFonts.demo` (or load and run the module directly instead of using `import`), it will look for the fonts folder, and draw a string with each one.  The result should look something like this:
+The `Font.print` method also takes an optional `scale` parameter (defaults to 1.0), allowing you to print larger or smaller than the default.
+
+If you run `bmfFonts.demo` (or load and run the module directly instead of using `import`), it will look for the fonts folder, and draw a string with each one.  The final font will be drawn at 3X scale at the bottom of the screen. The result should look something like this:
 
 ![bmfFonts demo](screenshot.png)
 

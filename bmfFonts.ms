@@ -188,36 +188,35 @@ end function
 // Render (draw) the given character to gfx, and return how
 // far to shift the cursor.  This uses the image cache, so
 // it gets faster after the first drawing of each character.
-Font.printChar = function(c, x=480, y=320)
+Font.printChar = function(c, x=480, y=320, scale=1)
 	d = self.charData(c)
 	if d == null then return 0
 	if d.image == null and d.width > 0 then d.image = self.makeCharImage(c)
 	x = x + d.relX
 	if d.image != null then
-		y = y - self.sizeOver - d.relY - d.image.height
-		gfx.drawImage d.image, x, y
+		if scale == 1 then
+			y = y - self.sizeOver - d.relY - d.image.height
+			gfx.drawImage d.image, x, y
+		else
+			y = y + scale * (-self.sizeOver - d.relY - d.image.height)
+			gfx.drawImage d.image, x, y, d.image.width*scale, d.image.height*scale
+		end if
 	end if
-	return d.shift
+	return d.shift * scale
 end function
 
 // Print the given string to gfx at the given location.
-Font.print = function(s, x=20, y=320)
+Font.print = function(s, x=20, y=320, scale=1)
 	lastc = ""
-	kernCount = 0
 	for c in s
-		if self.kern(lastc, c) then
-			//print lastc + c + ": " + self.kern(lastc, c)
-			kernCount = kernCount + 1
-		end if
-		x = x + self.kern(lastc, c)
-		x = x + self.printChar(c, x, y) + self.addSpace
+		x = x + self.kern(lastc, c) * scale
+		x = x + self.printChar(c, x, y, scale) + self.addSpace * scale
 		lastc = c
 	end for
-	//print "Kern applied to " + kernCount + "/" + (s.len-1) + " pairs"
 end function
 
 // Return the width of the given string in this font.
-Font.width = function(s)
+Font.width = function(s, scale=1)
 	sum = 0
 	lastc = ""
 	for c in s
@@ -231,7 +230,7 @@ end function
 // Demo program: find the fonts directory, then load and display
 // every font found therein.
 demo = function()
-	clear; text.row = 0
+	clear; text.row = 10
 	
 	fontsFolder = "fonts/fonts"
 	if not file.exists(fontsFolder) then fontsFolder = "fonts"
@@ -241,13 +240,20 @@ demo = function()
 	end if
 	
 	y = 640
+	lastFont = null
 	for fontFile in file.children(fontsFolder)
 		if fontFile[-4:] != ".bmf" then continue
 		f = Font.load(file.child(fontsFolder, fontFile))
 		if f == null then	continue
 		f.print fontFile + ": " + f.title, 10, y + f.sizeOver
 		y = y - f.lineHeight - 4
+		lastFont = f
 	end for
+	
+	if lastFont != null then
+		y = y - lastFont.lineHeight*3 - 12
+		lastFont.print fontFile + " X3!", 10, 0, 3.0
+	end if
 end function
 
 if locals == globals then demo
