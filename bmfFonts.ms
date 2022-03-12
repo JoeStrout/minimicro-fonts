@@ -28,11 +28,45 @@ CharData.load = function(data, pos)
 		end for
 	end if
 	return pos + bytes
-end function	
+end function
+
+// Find the colors array from our image and the given palette map,
+// which maps each usable color to an index (1 to number of colors).
+// Note that an index of 0 always means "don't draw" (transparent).
+CharData.findColorsFromImage = function(paletteMap)
+	self.colors = []
+	if not self.image then return
+	for bitmapY in range(self.height - 1)
+		for bitmapX in range(0, self.width - 1)
+			c = self.image.pixel(bitmapX, bitmapY)
+			alpha = c[-2:]; c = c[:-2]
+			// ToDo: deal with alpha later.
+			if paletteMap.hasIndex(c) then
+				self.colors.push paletteMap[c]
+			else
+				self.colors.push 0
+			end if
+		end for
+	end for
+end function
+
+// Write the data for this character out to a binary stream (defined
+// in Font.save, below).  This is a helper method for Font.save.
+CharData.save = function(stream, paletteMap)
+	stream.writeByte self.width
+	stream.writeByte self.height
+	stream.writeByte self.relX
+	stream.writeByte self.relY
+	stream.writeByte self.shift
+	self.findColorsFromImage paletteMap
+	for c in self.colors
+		stream.writeByte c
+	end for
+end function
 
 // Font class, storing all data about a particular font.
 Font = {}
-Font.data = null
+Font.data = null	// raw data from file
 Font.chars = null   // key: character; value: charData map
 Font.kernMap = null  // key: char1; value: map from char2->kern
 Font.setKern = function(c1, c2, kern)
@@ -60,12 +94,14 @@ Font.load = function(path)
 	f.chars = {}
 	data.littleEndian = true
 	vers = data.byte(4)
-	//print "Font version: " + floor(vers/16) + "." + vers % 16
+	f.version = floor(vers/16) + "." + vers % 16
 	f.lineHeight = data.sbyte(5)
 	f.sizeOver = data.sbyte(6)
 	f.sizeUnder = data.sbyte(7)
 	f.addSpace = data.sbyte(8)
 	f.sizeInner = data.sbyte(9)
+	f.usedColors = data.byte(10)
+	f.highestUsedColor = data.byte(11)
 	f.alphaBits = 0
 	f.numPalettes = 1
 	if vers >= 1.2 then
@@ -125,6 +161,135 @@ Font.load = function(path)
 		pos = pos + 10
 	end for
 	return f
+end function
+
+// Font.save: Save this font to disk, in either version 1.1
+// or version 1.2 format (depending on self.version).  Note
+// that this method ignores self.data, and creates new data
+// from the current font attributes and character data.
+Font.save = function(path)
+	// We'll need a little BinaryStream class wrapping a RawData,
+	// to make it easier.  This just expands the RawData buffer as we go.
+	BinaryStream = {}
+	BinaryStream.littleEndian = true
+	BinaryStream.buffer = null
+	BinaryStream.pos = 0
+	BinaryStream.ensure = function(bytesNeeded=4)
+		if self.buffer == null then
+			self.buffer = new RawData
+			self.buffer.resize 256
+			self.buffer.littleEndian = self.littleEndian
+		end if		
+		while self.pos + bytesNeeded > self.buffer.len
+			self.buffer.resize(self.buffer.len * 2)
+		end while
+	end function
+	BinaryStream.writeByte = function(byteVal)
+		self.ensure 1
+		self.buffer.setByte self.pos, byteVal
+		self.pos = self.pos + 1
+	end function
+	BinaryStream.writeSbyte = function(sbyteVal)
+		self.ensure 1
+		self.buffer.setSbyte self.pos, sbyteVal
+		self.pos = self.pos + 1
+	end function
+	BinaryStream.writeUshort = function(ushortVal)
+		self.ensure 2
+		self.buffer.setUshort self.pos, ushortVal
+		self.pos = self.pos + 2
+	end function
+	BinaryStream.writeUint = function(uintVal)
+		self.ensure 4
+		self.buffer.setUint self.pos, uintVal
+		self.pos = self.pos + 4
+	end function
+	BinaryStream.writeUtf8 = function(utf8Str)
+		// It's hard to know how many bytes to ensure.  But most UTF-8
+		// characters require 3 bytes or less, so this is probably safe:
+		self.ensure utf8Str.len*3
+		bytesUsed = self.buffer.setUtf8(self.pos, utf8Str)
+		self.pos = self.pos + bytesUsed
+		return bytesUsed
+	end function
+	BinaryStream.writeLenPrefixedString = function(s)
+		if s.len > 255 then s = s[:255]
+		self.ensure s.len*3 + 1
+		bytesUsed = self.buffer.setUtf8(self.pos + 1, s)
+		self.buffer.setByte(self.pos, bytesUsed)
+		self.pos = self.pos + bytesUsed + 1
+	end function
+	
+	// Gather statistics we will need later.
+	lowCharCount = 0
+	for c in self.chars.indexes
+		if c.code < 256 then lowCharCount = lowCharCount + 1
+	end for
+	if not self.hasIndex("usedColors") then self.usedColors = self.palette.len
+	if not self.hasIndex("highestUsedColor") then self.highestUsedColor = self.palette.len
+
+	paletteMap = {}  // key: color (sans alpha); value: color index + 1
+	for i in self.palette.indexes
+		paletteMap[self.palette[i]] = i + 1
+	end for
+
+	// Now we can use that to write out our BMF data.
+	data = new BinaryStream
+	data.littleEndian = true
+	
+	// magic header
+	data.writeUint 450225889
+//	data.writeUshort 57830
+//	data.writeUshort 54554
+	
+	// version
+	if self.version <= 1.1 then
+		data.writeByte 17  // 0x11
+	else
+		data.writeByte 18  // 0x12
+	end if
+	
+	// various font attributes
+	data.writeByte self.lineHeight
+	data.writeSbyte self.sizeOver
+	data.writeSbyte self.sizeUnder
+	data.writeSbyte self.addSpace
+	data.writeSbyte self.sizeInner
+	data.writeByte self.usedColors
+	data.writeByte self.highestUsedColor
+	if self.version > 1.1 then
+		data.writeByte self.alphaBits
+		data.writeByte self.extraPalettes
+	else
+		data.pos = data.pos + 2
+	end if
+	data.pos = data.pos + 2
+	data.writeByte self.palette.len
+	for p in self.palette
+		pl = color.toList(p)
+		data.writeByte pl[0]/4		// red (0-63)
+		data.writeByte pl[1]/4		// green
+		data.writeByte pl[2]/4		// blue
+	end for
+	data.writeLenPrefixedString(self.title)
+	data.writeUshort lowCharCount
+	if version > 1.1 then data.writeUshort self.chars.len
+	
+	// write out the low characters (Unicode < 256) first
+	for c in self.chars.indexes
+		if c.code > 255 then continue
+		data.writeByte c.code
+		self.chars[c].save data, paletteMap
+	end for
+
+	if version > 1.1 then
+		// ToDo: version 1.2 stuff (non-ASCII characters and kerning info)
+		
+	end if
+
+	// Finally, write this to a file.
+	data.buffer.resize data.pos
+	file.saveRaw path, data.buffer
 end function
 
 // Get the character data for the given character
