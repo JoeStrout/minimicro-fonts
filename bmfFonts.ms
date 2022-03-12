@@ -188,7 +188,7 @@ end function
 // Render (draw) the given character to gfx, and return how
 // far to shift the cursor.  This uses the image cache, so
 // it gets faster after the first drawing of each character.
-Font.printChar = function(c, x=480, y=320, scale=1)
+Font.printChar = function(c, x=480, y=320, scale=1, tint="#FFFFFF")
 	d = self.charData(c)
 	if d == null then return 0
 	if d.image == null and d.width > 0 then d.image = self.makeCharImage(c)
@@ -196,21 +196,23 @@ Font.printChar = function(c, x=480, y=320, scale=1)
 	if d.image != null then
 		if scale == 1 then
 			y = y - self.sizeOver - d.relY - d.image.height
-			gfx.drawImage d.image, x, y
+			gfx.drawImage d.image, x, y, d.image.width, d.image.height,
+			  0, 0, d.image.width, d.image.height, tint
 		else
 			y = y + scale * (-self.sizeOver - d.relY - d.image.height)
-			gfx.drawImage d.image, x, y, d.image.width*scale, d.image.height*scale
+			gfx.drawImage d.image, x, y, d.image.width*scale, d.image.height*scale,
+			  0, 0, d.image.width, d.image.height, tint
 		end if
 	end if
 	return d.shift * scale
 end function
 
 // Print the given string to gfx at the given location.
-Font.print = function(s, x=20, y=320, scale=1)
+Font.print = function(s, x=20, y=320, scale=1, tint="#FFFFFF")
 	lastc = ""
 	for c in s
 		x = x + self.kern(lastc, c) * scale
-		x = x + self.printChar(c, x, y, scale) + self.addSpace * scale
+		x = x + self.printChar(c, x, y, scale, tint) + self.addSpace * scale
 		lastc = c
 	end for
 end function
@@ -221,7 +223,8 @@ Font.width = function(s, scale=1)
 	lastc = ""
 	for c in s
 		d = self.charData(c)
-		sum = sum + d.shift + self.addSpace + self.kern(lastc, c)
+		if d == null then continue
+		sum = sum + (d.shift + self.addSpace + self.kern(lastc, c)) * scale
 		lastc = c
 	end for
 	return sum
