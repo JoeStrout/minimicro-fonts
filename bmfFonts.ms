@@ -30,35 +30,43 @@ CharData.load = function(data, pos)
 	return pos + bytes
 end function
 
+hexStrToInt = {}
+for i in range(0,255); hexStrToInt[hex2(i)] = i; end for
+
 // Find the colors array from our image and the given palette map,
 // which maps each usable color to an index (1 to number of colors).
 // Note that an index of 0 always means "don't draw" (transparent).
-CharData.findColorsFromImage = function(paletteMap)
+CharData.findColorsFromImage = function(paletteMap, alphaBits)
 	self.colors = []
 	if not self.image then return
 	for bitmapY in range(self.height - 1)
 		for bitmapX in range(0, self.width - 1)
 			c = self.image.pixel(bitmapX, bitmapY)
 			alpha = c[-2:]; c = c[:-2]
-			// ToDo: deal with alpha later.
 			if paletteMap.hasIndex(c) then
-				self.colors.push paletteMap[c]
+				colorIdx = paletteMap[c]
 			else
-				self.colors.push 0
+				colorIdx = 0
 			end if
+			if alphaBits == 8 then
+				// when alphaBits is 0, ignore the actual color
+				// and just store the alpha instead.
+				colorIdx = hexStrToInt[alpha]
+			end if
+			self.colors.push colorIdx
 		end for
 	end for
 end function
 
 // Write the data for this character out to a binary stream (defined
 // in Font.save, below).  This is a helper method for Font.save.
-CharData.save = function(stream, paletteMap)
+CharData.save = function(stream, paletteMap, alphaBits)
 	stream.writeByte self.width
 	stream.writeByte self.height
 	stream.writeByte self.relX
 	stream.writeByte self.relY
 	stream.writeByte self.shift
-	self.findColorsFromImage paletteMap
+	self.findColorsFromImage paletteMap, alphaBits
 	for c in self.colors
 		stream.writeByte c
 	end for
@@ -259,7 +267,7 @@ Font.save = function(path)
 	data.writeByte self.highestUsedColor
 	if self.version > 1.1 then
 		data.writeByte self.alphaBits
-		data.writeByte self.extraPalettes
+		data.writeByte self.numPalettes
 	else
 		data.pos = data.pos + 2
 	end if
@@ -279,7 +287,7 @@ Font.save = function(path)
 	for c in self.chars.indexes
 		if c.code > 255 then continue
 		data.writeByte c.code
-		self.chars[c].save data, paletteMap
+		self.chars[c].save data, paletteMap, self.alphaBits
 	end for
 
 	if version > 1.1 then
@@ -320,9 +328,14 @@ Font.renderChar = function(c, g, destX=0, destY=0)
 				c = d.colors[i]
 				i = i + 1
 				if not c then continue
-				if self.alphaBits then
+				if self.alphaBits == 8 then
 					a = floor(c / clrRange) * alphaScale
 					pixelColor = baseColor + hex2(a)
+				else if self.alphaBits > 0 then
+					// ToDo: handle this case.
+					// Seems like we should be looking in self.palette
+					// with the remaining bits of c, rather than using
+					// baseColor.				
 				else
 					pixelColor = self.palette[c-1]
 				end if

@@ -8,7 +8,7 @@ This repo provides code to read and render bitmap fonts in the "ByteMap Font" (B
 
 It also includes some sample font files that I believe to be in the public domain.  You can find thousands more at the web site above.
 
-## Usage
+## Basic usage
 
 Use this code with [Mini Micro](https://miniscript.org/MiniMicro).  Mini Micro is a fun, free, retro-style virtual computer based on [MiniScript](https://miniscript.org/), which is itself a clean, simple, modern scripting language.
 
@@ -38,6 +38,22 @@ The `Font.print` method also takes an optional `scale` parameter (defaults to 1.
 If you run `bmfFonts.demo` (or load and run the module directly instead of using `import`), it will look for the fonts folder, and draw a string with each one.  The final font will be drawn at 3X scale at the bottom of the screen. The result should look something like this:
 
 ![bmfFonts demo](screenshot.png)
+
+## Advanced Usage
+
+You can recolor a font by changing its palette.  This works especially well with grayscale fonts, like `fonts/ari14b.bmf` (Arial 14pt bold).  Example:
+
+```
+font = bmfFonts.Font.load("fonts/ari14b.bmf")
+n = font.palette.len
+for i in range(1,n)
+	f.palette[i-1] = color.lerp(color.black, color.lime, i/n)
+end for
+font.print "Hello world!", 100,100
+```
+
+Note that this must be done before printing with the font, as the character images are cached.  You can always load a fresh font object to draw in a new color.
+
 
 ## BMF Version Support
 

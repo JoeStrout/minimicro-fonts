@@ -2,10 +2,12 @@
 // little image files (in the format produced by unpack.ms), and 
 // packs them up into a .bmf file.
 
-if env.importPaths.indexOf("..") == null then env.importPaths.push ".."
+if env.importPaths.indexOf("..") == null then env.importPaths.insert 0, ".."
 import "bmfFonts"
 import "stringUtil"
 import "grfon"
+
+clear; text.row = 20
 
 if globals.hasIndex("srcPath") and globals.hasIndex("destPath") then
 	// swap these if they appear to have come directly from unpack
@@ -47,7 +49,9 @@ for codePoint in grfonData.chars.indexes
 end for
 
 gfx.clear
-font.print "The Quick Brown Fox jumped over the Lazy Dog.", 0, 640+font.sizeOver
+font.print "the quick brown fox jumps over the lazy dog.", 0, 640+font.sizeOver
+font.print "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.", 0, 590
+font.print "Little women, eminem, Molly Williams.", 0, 564
 
 if not globals.hasIndex("destPath") or not destPath then
 	destPath = input("Path to output .bmf file: ")

@@ -1,8 +1,9 @@
 // This program unpacks a BMF font into a GRFON data file
 // plus a little image for every glyph.
 
-if env.importPaths.indexOf("..") == null then env.importPaths.push ".."
+if env.importPaths.indexOf("..") == null then env.importPaths.insert 0, ".."
 import "bmfFonts"
+import "stringUtil"
 import "grfon"
 
 if globals.hasIndex("srcPath") and globals.hasIndex("destPath") then
