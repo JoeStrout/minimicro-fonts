@@ -6,6 +6,8 @@
 //	 w = f.width("Hello world!")
 //   f.print "Hello world!", 480 - w/2, 320
 
+print "Imported new bmfFonts"
+
 // CharData class, storing data about just one character in a particular font.
 CharData = {}
 
@@ -129,10 +131,11 @@ Font.load = function(path)
 	// Read ASCII characters
 	numAsciiChars = data.short(pos)
 	pos = pos + 2
-	//print numAsciiChars + " ASCII characters"
+	print numAsciiChars + " ASCII characters"
 	
 	for i in range(1, numAsciiChars)
 		// Read one character
+		p0 = pos
 		charData = new CharData
 		charData.charCode = data.byte(pos)
 		pos = pos + 1
@@ -145,7 +148,6 @@ Font.load = function(path)
 	// Read non-ASCII characters
 	numOtherChars = data.uint(pos)
 	pos = pos + 4
-	//print numOtherChars + " non-ASCII characters"
 	for i in range(1, numOtherChars)
 		// Read one character
 		charData = new CharData
@@ -160,14 +162,16 @@ Font.load = function(path)
 	if pos >= data.len then return f
 	kernCount = data.ushort(pos)
 	//print kernCount + " kerning pairs"
-	pos = pos + 2
-	for i in range(1, kernCount)
-		c1 = data.uint(pos)
-		c2 = data.uint(pos+4)
-		k = data.short(pos+8)
-		f.setKern char(c1), char(c2), k
-		pos = pos + 10
-	end for
+	if kernCount > 0 then
+		pos = pos + 2
+		for i in range(1, kernCount)
+			c1 = data.uint(pos)
+			c2 = data.uint(pos+4)
+			k = data.short(pos+8)
+			f.setKern char(c1), char(c2), k
+			pos = pos + 10
+		end for
+	end if
 	return f
 end function
 
@@ -230,11 +234,14 @@ Font.save = function(path)
 	
 	// Gather statistics we will need later.
 	lowCharCount = 0
+	highCharCount = 0
 	for c in self.chars.indexes
-		if c.code < 256 then lowCharCount = lowCharCount + 1
+		if c.code < 256 then lowCharCount = lowCharCount + 1 else highCharCount = highCharCount + 1
 	end for
 	if not self.hasIndex("usedColors") then self.usedColors = self.palette.len
 	if not self.hasIndex("highestUsedColor") then self.highestUsedColor = self.palette.len
+
+	print "Saving version " +self.version + " file with " + highCharCount + " high chars"
 
 	paletteMap = {}  // key: color (sans alpha); value: color index + 1
 	for i in self.palette.indexes
@@ -247,8 +254,6 @@ Font.save = function(path)
 	
 	// magic header
 	data.writeUint 450225889
-//	data.writeUshort 57830
-//	data.writeUshort 54554
 	
 	// version
 	if self.version <= 1.1 then
@@ -280,19 +285,45 @@ Font.save = function(path)
 		data.writeByte pl[2]/4		// blue
 	end for
 	data.writeLenPrefixedString(self.title)
+	print "Writing " + lowCharCount + " low chars"
 	data.writeUshort lowCharCount
-	if version > 1.1 then data.writeUshort self.chars.len
 	
 	// write out the low characters (Unicode < 256) first
 	for c in self.chars.indexes
 		if c.code > 255 then continue
+		p0 = data.pos
 		data.writeByte c.code
 		self.chars[c].save data, paletteMap, self.alphaBits
 	end for
-
-	if version > 1.1 then
-		// ToDo: version 1.2 stuff (non-ASCII characters and kerning info)
+	
+	if self.version > 1.1 then
+		// write the high characters (Unicode > 255) next
+		data.writeUint highCharCount
+		for c in self.chars.indexes
+			if c.code < 256 then continue
+			data.writeUint c.code
+			self.chars[c].save data, paletteMap, self.alphaBits
+		end for
 		
+		// write the kern map
+		kernCount = 0
+		if self.kernMap then
+			for submap in self.kernMap.values
+				kernCount = kernCount + submap.len
+			end for
+			data.writeUshort kernCount
+			print "Writing " + kernCount + " kern entries"
+			for k1 in self.kernMap.keys
+				k1Map = self.kernMap[k1]
+				for k2 in k1Map.keys
+					data.writeUint k1.code
+					data.writeUint k2.code
+					data.writeShort k1Map[k2]
+				end for
+			end for
+		else
+			data.writeUshort kernCount
+		end if
 	end if
 
 	// Finally, write this to a file.

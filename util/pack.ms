@@ -35,8 +35,8 @@ if not file.exists(grfonFile) then
 	exit
 end if
 grfonData = grfon.parse(file.readLines(grfonFile).join(char(10)))
-print "Read " + grfonFile + ", a version " + grfonData.version +
-   " file containing " + grfonData.chars.len + " characters"
+print "Read " + grfonFile + ", a version " + grfonData.version
+print "file containing " + grfonData.chars.len + " characters"
 
 // construct a Font out of the data from the file, plus the images
 font = new bmfFonts.Font
@@ -51,7 +51,8 @@ end for
 gfx.clear
 font.print "the quick brown fox jumps over the lazy dog.", 0, 640+font.sizeOver
 font.print "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.", 0, 590
-font.print "Little women, eminem, Molly Williams.", 0, 564
+font.print "Little women, eminem, Molly Williams… ain't nothin'!", 0, 564
+//font.print "Axis 0+, 1-, 2+2=4, 8-5-3.", 0, 564
 
 if not globals.hasIndex("destPath") or not destPath then
 	destPath = input("Path to output .bmf file: ")
