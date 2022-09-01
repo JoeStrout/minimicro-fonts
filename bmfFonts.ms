@@ -131,7 +131,7 @@ Font.load = function(path)
 	// Read ASCII characters
 	numAsciiChars = data.short(pos)
 	pos = pos + 2
-	print numAsciiChars + " ASCII characters"
+	// print numAsciiChars + " ASCII characters"
 	
 	for i in range(1, numAsciiChars)
 		// Read one character
@@ -240,14 +240,14 @@ Font.save = function(path)
 	end for
 	if not self.hasIndex("usedColors") then self.usedColors = self.palette.len
 	if not self.hasIndex("highestUsedColor") then self.highestUsedColor = self.palette.len
-
+	
 	print "Saving version " +self.version + " file with " + highCharCount + " high chars"
-
+	
 	paletteMap = {}  // key: color (sans alpha); value: color index + 1
 	for i in self.palette.indexes
 		paletteMap[self.palette[i]] = i + 1
 	end for
-
+	
 	// Now we can use that to write out our BMF data.
 	data = new BinaryStream
 	data.littleEndian = true
@@ -325,7 +325,7 @@ Font.save = function(path)
 			data.writeUshort kernCount
 		end if
 	end if
-
+	
 	// Finally, write this to a file.
 	data.buffer.resize data.pos
 	file.saveRaw path, data.buffer

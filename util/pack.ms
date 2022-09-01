@@ -54,6 +54,13 @@ font.print "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.", 0, 590
 font.print "Little women, eminem, Molly Williams… ain't nothin'!", 0, 564
 //font.print "Axis 0+, 1-, 2+2=4, 8-5-3.", 0, 564
 
+x = 500; y = 600
+for i in range(5)
+	gfx.line x-10, y, 900, y, color.gray
+	font.print "lineHeight " + font.lineHeight + ", a joy at y="+y, x, y
+	y = y - font.lineHeight
+end for
+
 if not globals.hasIndex("destPath") or not destPath then
 	destPath = input("Path to output .bmf file: ")
 else
