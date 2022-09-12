@@ -54,10 +54,16 @@ font.print "Hello world!", 100,100
 
 Note that this must be done before printing with the font, as the character images are cached.  You can always load a fresh font object to draw in a new color.
 
+Or, you can tint fonts as you draw them, just like tinting a sprite or using a tint color with drawImage.  To do this, supply the optional `scale` and `color` parameters to `Font.print`.
 
 ## BMF Version Support
 
 This code supports both version 1.1 and version 1.2 of the BMF format.  Version 1.2 is a recent but significant upgrade, adding support for non-ASCII Unicode characters, kerning, and an alpha channel for anti-aliased fonts.
 
+## Utilities
 
+This repo includes a `util` folder with a couple of utility programs.  These are not needed at runtime, but may be helpful to you in preparing your own fonts.  These are:
 
+- **unpack.ms**: simple utility to unpack a BMF file into a folder full of files, one image per glyph, plus a text file (in GRFON format) describing the font metrics etc.
+- **pack.ms**: performs the reverse operation, taking a folder full of files as produced by _unpack_, and generating a .bmf font file.
+- **fontEdit.ms**: a _work in progress_ font editor.  Not really usable yet; see GitHub issues (and coming soon, bounties!) for further development of this tool.
