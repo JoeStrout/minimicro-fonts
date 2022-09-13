@@ -1,10 +1,12 @@
-// Pixel Painting program.  Handy for making sprites
-// without ever leaving Mini Micro!
+// Font editing program.
+// Based originally on /sys/demo/fatbits.ms.
 
 import "listUtil"
 import "textUtil"
 import "mathUtil"
 import "qa"
+env.importPaths = [".", "/usr", "/usr/lib", "/sys/lib"]
+import "bmfFonts"
 
 // Constants and global state variables
 kModeDraw = "DRAW"
@@ -92,10 +94,11 @@ end function
 
 
 updatePaintScroll = function
-	hsz = 32 * previewArea.scale  // (half scrollbox size)
-	fatbits.scrollX = (previewArea.scrollbox.x-hsz - previewArea.left) / 
+	hw = 24 * previewArea.scale  // (half scrollbox width)
+	hh = 32 * previewArea.scale  // (half scrollbox height)
+	fatbits.scrollX = (previewArea.scrollbox.x-hw - previewArea.left) / 
 		previewArea.scale * fatbits.scale - paintArea.left
-	fatbits.scrollY = (previewArea.scrollbox.y-hsz - previewArea.bottom) /
+	fatbits.scrollY = (previewArea.scrollbox.y-hh - previewArea.bottom) /
 		previewArea.scale * fatbits.scale - paintArea.bottom
 end function
 
@@ -402,7 +405,7 @@ end function
 
 //---------------------------------------------------------------------
 // screen layout
-paintArea = Rect.make(180, 10, 64*ps, 64*ps)
+paintArea = Rect.make(180, 10, 48*ps, 64*ps)
 prepareScreen = function
 	paintArea.offset(5,5).fill bkgnd, color.clear
 	paintArea.grow(1,1).frame gfx, color.black, 4, -4
@@ -426,18 +429,23 @@ drawGrid = function
 	backdropRect.fill(backdrop, backdrop.color)
 	// Draw lines for individual "fat" pixels
 	gfx.color = "#88888866"
-	for i in range(1, 63)
+	area = paintArea.offset(gfx.scrollX, gfx.scrollY)
+	for i in range(1, area.height/ps)
 		if i % 8 == 0 then continue
-		x = paintArea.left + i*ps
-		gfx.line x, paintArea.top, x, paintArea.bottom
+		if i < area.width/ps then
+			x = paintArea.left + i*ps
+			gfx.line x, paintArea.top, x, paintArea.bottom
+		end if
 		y = paintArea.bottom + i*ps
 		gfx.line paintArea.left, y, paintArea.right, y
 	end for
 	// Draw 8x8 cell separators
 	gfx.color = "#777777AA"
 	for i in range(0, 64, 8)
-		x = paintArea.left + i*ps
-		gfx.line x, paintArea.top, x, paintArea.bottom
+		if i < area.width/ps then
+			x = paintArea.left + i*ps
+			gfx.line x, paintArea.top, x, paintArea.bottom
+		end if
 		y = paintArea.bottom + i*ps
 		gfx.line paintArea.left, y, paintArea.right, y
 	end for
@@ -906,32 +914,32 @@ setupUI.draw = function
 	spriteDisp.scrollX = 9999
 	self.buttons = []
 	if self.state == kStart then
-		textUtil.printCenteredAt 34, 21, "Create or Load Image"
+		textUtil.printCenteredAt 34, 21, "Create or Load Font"
 		newBtn = new textUtil.DialogButton
-		newBtn.caption = "NEW IMAGE"
+		newBtn.caption = "NEW FONT"
 		newBtn.x = 34-4-newBtn.width; newBtn.y = 18
 		newBtn.nextState = kNewFile
 		self.buttons.push newBtn
 		loadBtn = new textUtil.DialogButton
-		loadBtn.caption = "LOAD IMAGE"
+		loadBtn.caption = "LOAD FONT"
 		loadBtn.x = 34+4; loadBtn.y = 18
 		loadBtn.nextState = kLoadFile
 		self.buttons.push loadBtn
 	else if self.state == kNewFile then
-		textUtil.printCenteredAt 34, 21, "Create New Image"
+		textUtil.printCenteredAt 34, 21, "Create New Font"
 		textUtil.printAt 10, 18, "Current Directory: " + pwd
 		self.path = self.inputAt(10, 16, "New file path: ")
 		self.width = 0
 		while not self.width
-			self.width = self.inputAt(10, 14, "New image width:  ").val
+			self.width = self.inputAt(10, 14, "New glyph width:  ").val
 		end while
 		self.height = 0
 		while not self.height
-			self.height = self.inputAt(10, 13, "New image height: ").val
+			self.height = self.inputAt(10, 13, "New glyph height: ").val
 		end while
 		self.img = Image.create(self.width, self.height, color.clear)
-		if self.path[-4:] != ".png" then self.path = self.path + ".png"
-		err = file.saveImage(self.path, self.img)
+		if self.path[-4:] != ".bmf" then self.path = self.path + ".bmf"
+		err = "Creating font files not implemented yet" // file.saveImage(self.path, self.img)
 		if err then
 			textUtil.Dialog.make("Unable to Save File", err).show
 			self.state = kStart
@@ -941,16 +949,17 @@ setupUI.draw = function
 			self.state = kDone
 		end if
 	else if self.state == kLoadFile then
-		textUtil.printCenteredAt 34, 21, "Load Image"
+		textUtil.printCenteredAt 34, 21, "Load Font"
 		textUtil.printAt 10, 18, "Current Directory: " + pwd
-		self.path = self.inputAt(10, 16, "Image file path: ")
-		if self.path[-4:] != ".png" then self.path = self.path + ".png"
-		self.img = file.loadImage(self.path)
-		if self.img == null then
+		self.path = self.inputAt(10, 16, "Font file path: ")
+		if self.path[-4:] != ".bmf" then self.path = self.path + ".bmf"
+		self.font = bmfFonts.Font.load(self.path)
+		if self.font == null then
 			textUtil.Dialog.make("Unable to Open File", "Invalid path:" + char(13) + self.path).show
 			self.state = kStart
 			self.draw
 		else
+			self.img = self.font.makeCharImage("F")
 			addTabForImage self.img, self.path
 			self.state = kDone
 		end if
@@ -1155,11 +1164,12 @@ switchToTab = function(tab)
 	end if
 end function
 
-addTabForImage = function(img, path)
+addTabForFont = function(font, path)
 	tab = new OpenFile
-	tab.tabTitle = file.name(path) - ".png"
+	tab.tabTitle = file.name(path) - ".bmf"
 	tab.path = path
-	tab.image = img
+	tab.font = font
+	tab.image = font.makeCharImage("F")
 	tabs.insert -2, tab
 	globals.selectedTab = tab
 	layoutTabs; drawTabs
@@ -1172,7 +1182,7 @@ end function
 // Here's how this works:
 // 1. Preview area is the full size of the source image, unless that is bigger
 // than 194x220, in which case it caps at that, and shrinks the image down to fit.
-// 2. If the image is bigger than 64x64, then we draw a representation (as a sprite?
+// 2. If the image is bigger than 64x64, then we draw a representation (as a sprite?)
 // of the current 64x64 editing area, scaled in the same way as the image.
 // 3. Clicking in the preview moves this editing area around, scrolling fatbits.
 
@@ -1183,9 +1193,9 @@ previewArea.prepare = function(img)
 	// limit preview area size to at most 194 x 220:
 	self.scale = mathUtil.clamp([194/img.width, 220/img.height].min)
 	self.width = img.width * self.scale
-	self.left = 851 - self.width/2
+	self.left = 851 - floor(self.width/2)
 	self.height = img.height * self.scale
-	self.bottom = 162 - self.height/2
+	self.bottom = 162 - floor(self.height/2)
 	// update scrollbox (indicating currently viewable part of the image)
 	spriteDisp.sprites.removeVal self.scrollbox
 	self.scrollbox = new Sprite
@@ -1199,8 +1209,8 @@ previewArea.prepare = function(img)
 		self.scrollbox.x = self.left + sz/2
 		self.scrollbox.y = self.bottom + sz/2
 	end if
-	if img.width <= 64 then self.scrollbox.x = self.midX
-	if img.height <= 64 then self.scrollbox.y = self.midY
+	if img.width <= 64 then self.scrollbox.x = floor(self.midX)
+	if img.height <= 64 then self.scrollbox.y = floor(self.midY)
 end function
 
 previewArea.draw = function
@@ -1208,8 +1218,8 @@ previewArea.draw = function
 	previewArea.fill gfx, backdrop.color
 	previewArea.frame gfx, color.black
 	img = selectedTab.image
-	gfx.drawImage img, previewArea.midX - img.width*self.scale/2, 
-		previewArea.midY - img.height*self.scale/2,
+	gfx.drawImage img, previewArea.midX - floor(img.width*self.scale/2), 
+		previewArea.midY - floor(img.height*self.scale/2),
 		img.width * self.scale, img.height * self.scale//, 0, 0, img.width, img.height
 end function
 
@@ -1389,7 +1399,13 @@ setMode kModeDraw
 layoutTabs
 drawTabs
 
-setupUI.draw
+// For faster development, let's auto-load a font here...
+testPath = "/usr/fonts/Georgia-24.bmf"
+testFont = bmfFonts.Font.load(testPath)
+addTabForFont testFont, testPath
+setupUI.state = kDone
+// But for normal operation, just do:
+//setupUI.draw
 
 handleClick = function(justDown)
 	if mouse.y > 640-26 then
