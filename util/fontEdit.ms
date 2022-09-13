@@ -1242,12 +1242,13 @@ end function
 // FONT GLYPH LIST
 
 glyphList = Rect.make(160, 10, 140, 24*24)
+glyphList.scroll = 0		// scroll amount, in ROWS
 glyphList.draw = function
 	self.fill gfx, color.silver
 	font = selectedTab.font
 	rh = 24  // row height
 	y = self.top
-	for c in font.chars.indexes
+	for c in font.chars.indexes[self.scroll:]
 		listFont.print c, self.left + 3, y - 20, 1, color.black
 		listFont.print str(c.code), self.left + 30, y - 20, 1, color.black
 		img = font.getCharImage(c)
@@ -1256,8 +1257,6 @@ glyphList.draw = function
 			if scale > 1 then scale = 1
 			gfx.drawImage img, self.right - 4 - img.width*scale, 
 			  y - rh/2 - img.height*scale/2, img.width*scale, img.height*scale
-			gfx.drawRect self.right - 4 - img.width*scale, 
-			  y - rh/2 - img.height*scale/2, img.width*scale, img.height*scale, "#FFBBBB"
 		end if
 		gfx.line self.left, y-rh, self.right, y-rh, color.gray
 		y = y - rh
@@ -1266,6 +1265,30 @@ glyphList.draw = function
 	self.frame gfx, color.black, 2
 end function
 
+glyphList.checkEvents = function
+	rows = 24
+	maxScroll = selectedTab.font.chars.len - rows + 1
+	if key.pressed("page up") then
+		self.scroll = mathUtil.clamp(self.scroll - rows, 0, maxScroll)
+		self.draw
+		while key.pressed("page up"); yield; end while
+	else if key.pressed("page down") then
+		self.scroll = mathUtil.clamp(self.scroll + rows, 0, maxScroll)
+		self.draw
+		while key.pressed("page up"); yield; end while
+	end if
+	if not self.contains(mouse) then return
+	wheel = -key.axis("Mouse ScrollWheel")
+	if wheel then
+		if wheel > 0 then
+			self.scroll = self.scroll + ceil(wheel*2)
+		else
+			self.scroll = self.scroll + floor(wheel*2)
+		end if
+		self.scroll = mathUtil.clamp(self.scroll, 0, maxScroll)
+		self.draw
+	end if
+end function
 
 //--------------------------------------------------------------------------------
 // COLOR SWATCHES (foreground/background)
@@ -1517,6 +1540,7 @@ while true
 	for s in Slider.instances; s.checkEvents; end for
 	PalButton.checkEventsForAll
 	colorWheel.checkEvents
+	glyphList.checkEvents
 	
 	// then, update usage of tools (e.g. painting)
 	mouseIsDown = mouse.button
