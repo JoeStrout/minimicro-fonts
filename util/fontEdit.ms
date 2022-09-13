@@ -35,6 +35,8 @@ picW = 64
 picH = 64
 resourceDir = "/sys/data/fatbits/"
 
+listFont = bmfFonts.Font.load("/usr/fonts/minimicro-pro-20.bmf")
+
 // Prepare displays
 // text: display 1
 clear
@@ -405,13 +407,14 @@ end function
 
 //---------------------------------------------------------------------
 // screen layout
-paintArea = Rect.make(180, 10, 48*ps, 64*ps)
+paintArea = Rect.make(320, 10, 48*ps, 64*ps)
 prepareScreen = function
 	paintArea.offset(5,5).fill bkgnd, color.clear
 	paintArea.grow(1,1).frame gfx, color.black, 4, -4
 	backdrop.clear color.black
 	drawGrid
 	previewArea.draw
+	glyphList.draw
 	gfx.print "press ? for help", 955 - 16*9, 640-18, color.silver, "small"
 end function
 drawGrid = function
@@ -421,8 +424,8 @@ drawGrid = function
 	if img.width >= 64 then maxWidth = 64 else maxWidth = img.width
 	if img.height >= 64 then maxHeight = 64 else maxHeight = img.height
 	backdropRect = Rect.make(
-	    paintArea.midX - (maxWidth / 2)*ps,
-	    paintArea.midY - (maxHeight / 2)*ps,
+	    paintArea.midX - floor(maxWidth / 2)*ps,
+	    paintArea.midY - floor(maxHeight / 2)*ps,
 	    maxWidth * ps,
 	    maxHeight * ps)
 	// Fill backdrop area
@@ -1234,6 +1237,35 @@ previewArea.handleClick = function
 		updatePaintScroll
 	end while
 end function
+
+//--------------------------------------------------------------------------------
+// FONT GLYPH LIST
+
+glyphList = Rect.make(160, 10, 140, 24*24)
+glyphList.draw = function
+	self.fill gfx, color.silver
+	font = selectedTab.font
+	rh = 24  // row height
+	y = self.top
+	for c in font.chars.indexes
+		listFont.print c, self.left + 3, y - 20, 1, color.black
+		listFont.print str(c.code), self.left + 30, y - 20, 1, color.black
+		img = font.getCharImage(c)
+		if img != null then
+			scale = rh / img.height
+			if scale > 1 then scale = 1
+			gfx.drawImage img, self.right - 4 - img.width*scale, 
+			  y - rh/2 - img.height*scale/2, img.width*scale, img.height*scale
+			gfx.drawRect self.right - 4 - img.width*scale, 
+			  y - rh/2 - img.height*scale/2, img.width*scale, img.height*scale, "#FFBBBB"
+		end if
+		gfx.line self.left, y-rh, self.right, y-rh, color.gray
+		y = y - rh
+		if y <= self.bottom then break
+	end for
+	self.frame gfx, color.black, 2
+end function
+
 
 //--------------------------------------------------------------------------------
 // COLOR SWATCHES (foreground/background)
