@@ -1155,16 +1155,31 @@ handleTabClick = function
 	end for
 end function
 
+refreshDrawPanel = function(tab)
+	setupUI.clear
+	previewArea.prepare tab.image
+	prepareScreen
+	tab.loadToEditArea
+end function
+
 switchToTab = function(tab)
 	if tab == specialNewTabTab then
 		setupUI.state = kStart
 		setupUI.draw
 	else
-		setupUI.clear
-		previewArea.prepare tab.image
-		prepareScreen
-		tab.loadToEditArea
+		refreshDrawPanel(tab)
 	end if
+end function
+
+changeEditCharacter = function(character)
+	selectedTab.font.charData(selectedTab.curChar).image = fatbits.getImage(0, 0, picW, picH)
+	selectedTab.curChar = character
+	font = selectedTab.font
+	selectedTab.image = font.getCharImage(character)
+	if selectedTab.image == null then
+		selectedTab.image = Image.create(1, 1, color.clear) // For invalid characters that don't have any charData, handle this better or something?
+	end if
+	refreshDrawPanel(selectedTab)
 end function
 
 addTabForFont = function(font, path)
@@ -1172,7 +1187,8 @@ addTabForFont = function(font, path)
 	tab.tabTitle = file.name(path) - ".bmf"
 	tab.path = path
 	tab.font = font
-	tab.image = font.makeCharImage("F")
+	tab.curChar = font.chars.indexes[1]
+	tab.image = font.makeCharImage(font.chars.indexes[1])
 	tabs.insert -2, tab
 	globals.selectedTab = tab
 	layoutTabs; drawTabs
@@ -1243,12 +1259,16 @@ end function
 
 glyphList = Rect.make(160, 10, 140, 24*24)
 glyphList.scroll = 0		// scroll amount, in ROWS
+glyphList.selectedIndex = 0
 glyphList.draw = function
-	self.fill gfx, color.silver
+	self.fill gfx, color.silver // color.rgb(70, 130, 180)
 	font = selectedTab.font
 	rh = 24  // row height
 	y = self.top
 	for c in font.chars.indexes[self.scroll:]
+		if c == selectedTab.curChar then
+			gfx.fillRect self.left, y-rh, 140, 24, color.rgb(70, 130, 180)
+		end if
 		listFont.print c, self.left + 3, y - 20, 1, color.black
 		listFont.print str(c.code), self.left + 30, y - 20, 1, color.black
 		img = font.getCharImage(c)
@@ -1287,6 +1307,14 @@ glyphList.checkEvents = function
 		end if
 		self.scroll = mathUtil.clamp(self.scroll, 0, maxScroll)
 		self.draw
+	end if
+	if mouse.button(0) then
+		clicky = self.scroll + floor((self.top - mouse.y) / 24)
+		if clicky != self.selectedIndex then
+			self.selectedIndex = clicky
+			changeEditCharacter(selectedTab.font.chars.indexes[self.selectedIndex])
+			self.draw
+		end if
 	end if
 end function
 
