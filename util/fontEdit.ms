@@ -1312,7 +1312,7 @@ glyphList.checkEvents = function
 		clicky = self.scroll + floor((self.top - mouse.y) / 24)
 		if clicky != self.selectedIndex then
 			self.selectedIndex = clicky
-			changeEditCharacter(selectedTab.font.chars.indexes[self.selectedIndex])
+			changeEditCharacter selectedTab.font.chars.indexes[self.selectedIndex]
 			self.draw
 		end if
 	end if
