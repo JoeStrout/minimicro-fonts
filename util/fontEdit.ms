@@ -63,6 +63,29 @@ display(5).mode = displayMode.pixel
 fatbits = display(5)
 fatbits.clear color.clear, picW, picH
 fatbits.scale = ps
+// draw image, handling transparent pixels correctly
+fatbits.drawAlpha = function(img, left=0, bottom=0)
+	if img then
+		for y in range(0, img.height - 1)
+			for x in range(0, img.width - 1)
+                outX = left + x
+                outY = bottom + y
+				imgC = color.toList(img.pixel(x, y))
+                gfxC = color.toList(self.pixel(outX, outY))
+                imgAlpha = imgC[3] / 255
+                gfxAlpha = gfxC[3] / 255 * (1 - imgAlpha)
+                a = imgAlpha + gfxAlpha
+                r = 0; g = 0; b = 0
+                if a > 0 then
+                    r = (imgC[0] * imgAlpha + gfxC[0] * gfxAlpha) / a
+                    g = (imgC[1] * imgAlpha + gfxC[1] * gfxAlpha) / a
+                    b = (imgC[2] * imgAlpha + gfxC[2] * gfxAlpha) / a
+                end if
+				self.setPixel outX, outY, color.fromList([round(r), round(g), round(b), round(a * 255)])
+			end for
+		end for
+	end if
+end function
 // backdrop: area that appears behind the fat-bits drawing (and preview area)
 display(6).mode = displayMode.pixel
 backdrop = display(6)
@@ -551,7 +574,7 @@ end function
 deleteSelection = function
 	if mode == kModePasting then
 		fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-		fatbits.drawImage picAtStart, 0, 0
+		fatbits.drawAlpha picAtStart, 0, 0
 		setMode kModeSelect
 	else if selection != null then
 		selection.fill fatbits, backColor
@@ -570,8 +593,8 @@ end function
 
 updatePaste = function(pp)
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart, 0, 0
-	fatbits.drawImage clip, pp.x - floor(clip.width/2), pp.y - floor(clip.height/2)
+	fatbits.drawAlpha picAtStart, 0, 0
+	fatbits.drawAlpha clip, pp.x - floor(clip.width/2), pp.y - floor(clip.height/2)
 end function
 
 //--------------------------------------------------------------------------------
@@ -589,7 +612,7 @@ toolFuncs[kModeMove] = function(pp, justDown)
 	dx = pp.x - startPaintPos.x
 	dy = pp.y - startPaintPos.y
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage startPaintImg.getImage(-dx * (dx<0), -dy * (dy<0), 
+	fatbits.drawAlpha startPaintImg.getImage(-dx * (dx<0), -dy * (dy<0), 
 		picW-abs(dx), picH-abs(dy)), dx * (dx>0), dy * (dy>0)
 end function
 
@@ -694,7 +717,7 @@ toolFuncs[kModeLine] = function(pp, justDown)
 		return
 	end if
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
+	fatbits.drawAlpha(picAtStart)
 	startPos = symmetries(posAtStart)
 	curPos = symmetries(pp)
 	for i in curPos.indexes
@@ -709,7 +732,7 @@ toolFuncs[kModeDrawRect] = function(pp, justDown)
 		return
 	end if
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
+	fatbits.drawAlpha picAtStart
 	startPos = symmetries(posAtStart)
 	curPos = symmetries(pp)
 	for i in curPos.indexes
@@ -724,7 +747,7 @@ toolFuncs[kModeFillRect] = function(pp, justDown)
 		return
 	end if
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
+	fatbits.drawAlpha picAtStart
 	startPos = symmetries(posAtStart)
 	curPos = symmetries(pp)
 	for i in curPos.indexes
@@ -739,7 +762,7 @@ toolFuncs[kModeDrawEllipse] = function(pp, justDown)
 		return
 	end if
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
+	fatbits.drawAlpha picAtStart
 	startPos = symmetries(posAtStart)
 	curPos = symmetries(pp)
 	for i in curPos.indexes
@@ -754,7 +777,7 @@ toolFuncs[kModeFillEllipse] = function(pp, justDown)
 		return
 	end if
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
+	fatbits.drawAlpha picAtStart
 	startPos = symmetries(posAtStart)
 	curPos = symmetries(pp)
 	for i in curPos.indexes
@@ -772,8 +795,8 @@ toolFuncs[kModeLighten] = function(pp, justDown)
 		scratch.fillEllipse pos.x - brushSize/2, pos.y - brushSize/2, brushSize, brushSize, "#FFFFFF22"
 	end for
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
-	fatbits.drawImage scratch.getImage(0, 0, picW, picH)
+	fatbits.drawAlpha picAtStart
+	fatbits.drawAlpha scratch.getImage(0, 0, picW, picH)
 end function
 
 toolFuncs[kModeDarken] = function(pp, justDown)
@@ -786,8 +809,8 @@ toolFuncs[kModeDarken] = function(pp, justDown)
 		scratch.fillEllipse pos.x - brushSize/2, pos.y - brushSize/2, brushSize, brushSize, "#00000022"
 	end for
 	fatbits.fillRect 0, 0, picW+1, picH+1, color.clear
-	fatbits.drawImage picAtStart
-	fatbits.drawImage scratch.getImage(0, 0, picW, picH)
+	fatbits.drawAlpha picAtStart
+	fatbits.drawAlpha scratch.getImage(0, 0, picW, picH)
 end function
 
 toolFuncs[kModeSelect] = function(pp, justDown)
@@ -1039,7 +1062,7 @@ OpenFile.loadToEditArea = function
 	globals.picW = self.image.width; globals.picH = self.image.height
 	fatbits.clear color.clear, picW, picH
 	fatbits.scale = ps
-	fatbits.drawImage self.image
+	fatbits.drawAlpha self.image
 	updatePaintScroll
 end function
 OpenFile.saveToDisk = function
