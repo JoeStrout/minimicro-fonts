@@ -63,9 +63,16 @@ display(5).mode = displayMode.pixel
 fatbits = display(5)
 fatbits.clear color.clear, picW, picH
 fatbits.scale = ps
-// draw image, handling transparent pixels correctly
+
+// draw image, handling transparent pixels correctly in Mini Micro 1.1.1 or older
 fatbits.drawAlpha = function(img, left=0, bottom=0)
-	if img then
+	if not img then return
+	if version.host > 1.11 then
+		// drawImage was corrected in version 1.1.2 (version.host = 1.12),
+		// so we can just use the built-in method, which is faster and cleaner
+		self.drawImage img, left, bottom
+	else
+		// for older versions of Mini Micro, we have to do it manually:
 		for y in range(0, img.height - 1)
 			for x in range(0, img.width - 1)
                 outX = left + x
@@ -86,6 +93,7 @@ fatbits.drawAlpha = function(img, left=0, bottom=0)
 		end for
 	end if
 end function
+
 // backdrop: area that appears behind the fat-bits drawing (and preview area)
 display(6).mode = displayMode.pixel
 backdrop = display(6)
