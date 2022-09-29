@@ -101,7 +101,6 @@ fatbits.drawAlpha = function(img, left=0, bottom=0)
 					if gfxColor[7] == "0" and gfxColor[8] == "0" then
 						self.setPixel outX, outY, imgColor
 					else
-						gfx
 						imgC = color.toList(imgColor)
 						gfxC = color.toList(gfxColor)
 						imgAlpha = imgC[3] / 255
