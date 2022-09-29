@@ -73,22 +73,45 @@ fatbits.drawAlpha = function(img, left=0, bottom=0)
 		self.drawImage img, left, bottom
 	else
 		// for older versions of Mini Micro, we have to do it manually:
-		for y in range(0, img.height - 1)
-			for x in range(0, img.width - 1)
-                outX = left + x
-                outY = bottom + y
-				imgC = color.toList(img.pixel(x, y))
-                gfxC = color.toList(self.pixel(outX, outY))
-                imgAlpha = imgC[3] / 255
-                gfxAlpha = gfxC[3] / 255 * (1 - imgAlpha)
-                a = imgAlpha + gfxAlpha
-                r = 0; g = 0; b = 0
-                if a > 0 then
-                    r = (imgC[0] * imgAlpha + gfxC[0] * gfxAlpha) / a
-                    g = (imgC[1] * imgAlpha + gfxC[1] * gfxAlpha) / a
-                    b = (imgC[2] * imgAlpha + gfxC[2] * gfxAlpha) / a
-                end if
-				self.setPixel outX, outY, color.fromList([round(r), round(g), round(b), round(a * 255)])
+
+		// find visible image bounds
+		startX = 0
+		if left < 0 then startX = -left
+		startY = 0
+		if bottom < 0 then startY = -bottom
+		endX = img.width
+		if self.width - left < img.width then endX = self.width - left
+		endY = img.height
+		if self.height - bottom < img.height then endY = self.height - bottom
+		// skip if image is out of bounds
+		if startX >= endX or startY >= endY then return
+		for y in range(startY, endY - 1)
+			for x in range(startX, endX - 1)
+				imgColor = img.pixel(x, y)
+				// skip transparent pixels
+				if imgColor[7] == "0" and imgColor[8] == "0" then continue
+				// copy opaque image pixels
+				if imgColor[7] == "F" and imgColor[8] == "F" then
+					self.setPixel left + x, bottom + y, imgColor
+				else
+					outX = left + x
+					outY = bottom + y
+					gfxColor = self.pixel(outX, outY)
+					// copy if gfx pixel is transparent
+					if gfxColor[7] == "0" and gfxColor[8] == "0" then
+						self.setPixel outX, outY, imgColor
+					else
+						imgC = color.toList(imgColor)
+						gfxC = color.toList(gfxColor)
+						imgAlpha = imgC[3] / 255
+						gfxAlpha = gfxC[3] / 255 * (1 - imgAlpha)
+						a = imgAlpha + gfxAlpha
+						r = (imgC[0] * imgAlpha + gfxC[0] * gfxAlpha) / a
+						g = (imgC[1] * imgAlpha + gfxC[1] * gfxAlpha) / a
+						b = (imgC[2] * imgAlpha + gfxC[2] * gfxAlpha) / a
+						self.setPixel outX, outY, color.fromList([round(r), round(g), round(b), round(a * 255)])
+					end if
+				end if
 			end for
 		end for
 	end if
