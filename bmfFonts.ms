@@ -457,15 +457,17 @@ demo = function()
 		if fontFile[-4:] != ".bmf" then continue
 		f = Font.load(file.child(fontsFolder, fontFile))
 		if f == null then	continue
+		if y - f.lineHeight < 0 then
+			dy = f.lineHeight + 4
+			gfx.drawImage gfx.getImage(0, 0, 960, 640-dy), 0, dy
+			gfx.fillRect 0, 0, 960, dy, color.black
+			y = y + dy
+		end if
 		f.print fontFile + ": " + f.title, 10, y + f.sizeOver
-		y = y - f.lineHeight - 4
+		y = y - f.lineHeight - 4		
 		lastFont = f
 	end for
-	
-	if lastFont != null then
-		y = y - lastFont.lineHeight*3 - 12
-		lastFont.print fontFile + " X3!", 10, 0, 3.0
-	end if
+	text.row = 0
 end function
 
 if locals == globals then demo

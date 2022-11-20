@@ -979,7 +979,7 @@ setupUI.draw = function
 			self.state = kStart
 			self.draw
 		else
-			addTabForImage self.img, self.path
+			addTabForFont self.font, self.path
 			self.state = kDone
 		end if
 	else if self.state == kLoadFile then
@@ -994,7 +994,7 @@ setupUI.draw = function
 			self.draw
 		else
 			self.img = self.font.makeCharImage("F")
-			addTabForImage self.img, self.path
+			addTabForFont self.font, self.path
 			self.state = kDone
 		end if
 	end if
