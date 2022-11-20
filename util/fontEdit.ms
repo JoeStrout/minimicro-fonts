@@ -1075,6 +1075,10 @@ OpenFile.loadToEditArea = function
 end function
 OpenFile.saveToDisk = function
 	if self == selectedTab then self.saveFromEditArea
+	dlog = textUtil.Dialog.make("DOH!", "Saving fonts is not yet implemented.  So sorry!  Coming soon, I promise. :)")
+	dlog.show
+	return	
+	
 	err = file.saveImage(self.path, self.image)
 	if not err then
 		dlog = textUtil.Dialog.make("Saved """ + file.name(self.path) + """",
