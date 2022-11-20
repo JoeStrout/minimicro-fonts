@@ -24,6 +24,11 @@ CharData.load = function(data, pos)
 	self.image = null
 	pos = pos + 5
 	bytes = self.width * self.height
+//	print "For " + self.charCode + " (" + char(self.charCode) + ") " + self.width+"x"+self.height + " char at " + pos + ", expecting " + bytes + " bytes of data"
+	if pos + bytes > data.len then
+		print "ERROR: unexpected end of data"
+		return pos + bytes
+	end if
 	if bytes then
 		for i in range(0, bytes-1)
 			self.colors.push data.byte(pos+i)
@@ -38,9 +43,10 @@ for i in range(0,255); hexStrToInt[hex2(i)] = i; end for
 // Find the colors array from our image and the given palette map,
 // which maps each usable color to an index (1 to number of colors).
 // Note that an index of 0 always means "don't draw" (transparent).
+// Also, this function has no effect if self.image is null.
 CharData.findColorsFromImage = function(paletteMap, alphaBits)
-	self.colors = []
 	if not self.image then return
+	self.colors = []
 	for bitmapY in range(self.height - 1)
 		for bitmapX in range(0, self.width - 1)
 			c = self.image.pixel(bitmapX, bitmapY)
@@ -104,7 +110,7 @@ Font.load = function(path)
 	f.chars = {}
 	data.littleEndian = true
 	vers = data.byte(4)
-	f.version = floor(vers/16) + "." + vers % 16
+	f.version = floor(vers/16) + 0.1 * (vers % 16)
 	f.lineHeight = data.sbyte(5)
 	f.sizeOver = data.sbyte(6)
 	f.sizeUnder = data.sbyte(7)
@@ -125,13 +131,13 @@ Font.load = function(path)
 	end for
 	titleLen = data.byte(17+palSize*3)
 	f.title = data.utf8(18+palSize*3, titleLen)
-	//print f.title
+	print f.title
 	pos = 18 + palSize*3 + titleLen
 	
 	// Read ASCII characters
 	numAsciiChars = data.short(pos)
 	pos = pos + 2
-	// print numAsciiChars + " ASCII characters"
+	print numAsciiChars + " ASCII characters"
 	
 	for i in range(1, numAsciiChars)
 		// Read one character
@@ -294,6 +300,7 @@ Font.save = function(path)
 		p0 = data.pos
 		data.writeByte c.code
 		self.chars[c].save data, paletteMap, self.alphaBits
+		//print "Wrote " + c.code + " (" + c + ") with " + (data.pos-p0) + " bytes at " + p0
 	end for
 	
 	if self.version > 1.1 then
@@ -327,8 +334,10 @@ Font.save = function(path)
 	end if
 	
 	// Finally, write this to a file.
+	print "Saving " + data.pos + " bytes of data to " + path
 	data.buffer.resize data.pos
-	file.saveRaw path, data.buffer
+	err = file.saveRaw(path, data.buffer)
+	return err
 end function
 
 // Get the character data for the given character

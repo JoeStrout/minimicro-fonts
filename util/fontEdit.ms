@@ -1064,7 +1064,8 @@ OpenFile.tabTitle = ""
 OpenFile.srcRect = null
 OpenFile.closeBtn = null
 OpenFile.saveFromEditArea = function
-	self.image = fatbits.getImage(0, 0, self.image.width, self.image.height)
+	self.image = fatbits.getImage(0, 0, picW, picH)
+	selectedTab.font.charData(selectedTab.curChar).image = self.image
 end function
 OpenFile.loadToEditArea = function
 	globals.picW = self.image.width; globals.picH = self.image.height
@@ -1075,14 +1076,11 @@ OpenFile.loadToEditArea = function
 end function
 OpenFile.saveToDisk = function
 	if self == selectedTab then self.saveFromEditArea
-	dlog = textUtil.Dialog.make("DOH!", "Saving fonts is not yet implemented.  So sorry!  Coming soon, I promise. :)")
-	dlog.show
-	return	
-	
-	err = file.saveImage(self.path, self.image)
+
+	err = self.font.save(self.path)
 	if not err then
 		dlog = textUtil.Dialog.make("Saved """ + file.name(self.path) + """",
-		   self.path + char(13) + self.image.width + " x " + self.image.height + " pixels")
+		   self.path + char(13) + self.font.chars.len + " characters")
 		dlog.okBtn.visible = false
 		dlog.show 2
 	else
@@ -1214,7 +1212,7 @@ changeEditCharacter = function(character)
 	if selectedTab.image == null then
 		selectedTab.image = Image.create(1, 1, color.clear) // For invalid characters that don't have any charData, handle this better or something?
 	end if
-	refreshDrawPanel(selectedTab)
+	refreshDrawPanel selectedTab
 end function
 
 addTabForFont = function(font, path)
@@ -1330,7 +1328,7 @@ glyphList.checkEvents = function
 	else if key.pressed("page down") then
 		self.scroll = mathUtil.clamp(self.scroll + rows, 0, maxScroll)
 		self.draw
-		while key.pressed("page up"); yield; end while
+		while key.pressed("page down"); yield; end while
 	end if
 	if not self.contains(mouse) then return
 	wheel = -key.axis("Mouse ScrollWheel")
@@ -1541,6 +1539,7 @@ end function
 
 showHelp = function
 	lines = []
+	lines.push "PgUp/PgDn - Scroll List "
 	lines.push "Alt - Color Picker      "
 	lines.push "X - Cut                 "
 	lines.push "C - Copy                "
