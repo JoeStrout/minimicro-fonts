@@ -116,8 +116,7 @@ brushRowWidths = [null, [1], [2,2], [3,3,3], [2,4,4,2], [3,5,5,5,3], [4,6,6,6,6,
   [3,5,7,7,7,5,3], [4,6,8,8,8,8,6,4], [5,7,9,9,9,9,9,7,5], [4,8,8,10,10,10,10,8,8,4],
   [5,7,9,11,11,11,11,11,9,7,5], [4,8,10,10,12,12,12,12,10,10,8,4]]
 
-
-// Helper methods we probably should have in a utils module somewhere
+// Helper method we probably should have in a utils module somewhere
 Sprite.addBounds = function(inset=0)
 	qa.assert self.image != null, "Sprite image is null"
 	self.localBounds = new Bounds
@@ -125,6 +124,22 @@ Sprite.addBounds = function(inset=0)
 	self.localBounds.height = self.image.height - inset*2
 end function
 
+// prepare font-metric sprites
+lineSprite = new Sprite
+lineSprite.image = Image.create(100, 1, color.white)
+uiImg = file.loadImage("/usr/util/fontEditUI.png")
+if uiImg == null then
+	print "Unable to load fontEditUI.png."
+	exit
+end if
+uiSprite = {}
+y = uiImg.height - 16
+for item in "base under over curs shift".split
+	uiSprite[item] = new Sprite
+	uiSprite[item].image = uiImg.getImage(0, y, uiImg.width, 16)
+	y = y - 16
+	spriteDisp.sprites.push uiSprite[item]
+end for
 
 updatePaintScroll = function
 	hw = 24 * previewArea.scale  // (half scrollbox width)
@@ -133,6 +148,25 @@ updatePaintScroll = function
 		previewArea.scale * fatbits.scale - paintArea.left
 	fatbits.scrollY = (previewArea.scrollbox.y-hh - previewArea.bottom) /
 		previewArea.scale * fatbits.scale - paintArea.bottom
+end function
+
+updateMetricSprites = function
+	font = selectedTab.font
+	charData = font.charData(selectedTab.curChar)
+	// position baseline, sizeOver - relY from the top of the image.
+	pp = {}	// (painting position, in coordinate system of our current image)
+	pp.x = -1
+	pp.y = charData.height + charData.relY + font.sizeOver - 0.5
+	uiSprite.base.x = xAtPaintPixel(pp) - 20
+	uiSprite.base.y = yAtPaintPixel(pp)
+	
+	pp.y = pp.y - font.sizeUnder - 1
+	uiSprite.under.x = uiSprite.base.x
+	uiSprite.under.y = yAtPaintPixel(pp)
+	
+	pp.y = pp.y + font.sizeUnder - font.sizeOver + 2
+	uiSprite.over.x = uiSprite.base.x
+	uiSprite.over.y = yAtPaintPixel(pp)
 end function
 
 //---------------------------------------------------------------------
@@ -1073,6 +1107,7 @@ OpenFile.loadToEditArea = function
 	fatbits.scale = ps
 	fatbits.drawAlpha self.image
 	updatePaintScroll
+	updateMetricSprites
 end function
 OpenFile.saveToDisk = function
 	if self == selectedTab then self.saveFromEditArea
