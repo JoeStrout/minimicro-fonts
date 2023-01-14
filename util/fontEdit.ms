@@ -137,6 +137,7 @@ y = uiImg.height - 16
 for item in "base under over curs shift".split
 	uiSprite[item] = new Sprite
 	uiSprite[item].image = uiImg.getImage(0, y, uiImg.width, 16)
+	if item == "curs" or item == "shift" then uiSprite[item].rotation = 90
 	y = y - 16
 	spriteDisp.sprites.push uiSprite[item]
 end for
@@ -154,19 +155,30 @@ updateMetricSprites = function
 	font = selectedTab.font
 	charData = font.charData(selectedTab.curChar)
 	// position baseline, sizeOver - relY from the top of the image.
+	// Keep in mind that sizeOver is negative.
 	pp = {}	// (painting position, in coordinate system of our current image)
 	pp.x = -1
 	pp.y = charData.height + charData.relY + font.sizeOver - 0.5
 	uiSprite.base.x = xAtPaintPixel(pp) - 20
 	uiSprite.base.y = yAtPaintPixel(pp)
-	
-	pp.y = pp.y - font.sizeUnder - 1
-	uiSprite.under.x = uiSprite.base.x
-	uiSprite.under.y = yAtPaintPixel(pp)
-	
-	pp.y = pp.y + font.sizeUnder - font.sizeOver + 2
+		
+	pp.y = charData.height + charData.relY - 0.5
 	uiSprite.over.x = uiSprite.base.x
-	uiSprite.over.y = yAtPaintPixel(pp)
+	uiSprite.over.y = yAtPaintPixel(pp) + 8
+	
+	pp.y = charData.height + font.sizeOver - font.sizeUnder - 0.5
+	uiSprite.under.x = uiSprite.base.x
+	uiSprite.under.y = yAtPaintPixel(pp) - 8
+	
+	pp.y -= 1
+	pp.x = -charData.relX - 0.5
+	uiSprite.curs.x = xAtPaintPixel(pp) - 8
+	uiSprite.curs.y = yAtPaintPixel(pp) - 20
+	
+	pp.x = -charData.relX + charData.shift
+	uiSprite.shift.x = xAtPaintPixel(pp) + 8
+	uiSprite.shift.y = yAtPaintPixel(pp) - 20	
+	
 end function
 
 //---------------------------------------------------------------------
@@ -1416,7 +1428,7 @@ Swatch.init = function(x, y, labelYOffset, selected=false)
 	if Swatch.instances.indexOf(self) == null then Swatch.instances.push self
 end function
 
-Swatch.make = function(x, y, c=color.white, selected=false)
+Swatch.make = function(x, y, c="#FFFFFF", selected=false)
 	noob = new Swatch
 	noob.init x, y, c, selected
 	return noob
@@ -1551,7 +1563,7 @@ layoutTabs
 drawTabs
 
 // For faster development, let's auto-load a font here...
-testPath = "/usr/fonts/Georgia-24.bmf"
+testPath = "/usr/fonts/minimicro-pro-12.bmf"
 testFont = bmfFonts.Font.load(testPath)
 addTabForFont testFont, testPath
 setupUI.state = kDone

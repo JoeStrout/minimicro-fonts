@@ -6,10 +6,9 @@
 //	 w = f.width("Hello world!")
 //   f.print "Hello world!", 480 - w/2, 320
 
-print "Imported new bmfFonts"
-
 // CharData class, storing data about just one character in a particular font.
 CharData = {}
+CharData._name = "bmfFonts.CharData";
 
 // Helper function to load one character into the given
 // charData map.  Return the next data position after
@@ -82,6 +81,7 @@ end function
 
 // Font class, storing all data about a particular font.
 Font = {}
+CharData._name = "bmfFonts.Font";
 Font.data = null	// raw data from file
 Font.chars = null   // key: character; value: charData map
 Font.kernMap = null  // key: char1; value: map from char2->kern
@@ -131,7 +131,7 @@ Font.load = function(path)
 	end for
 	titleLen = data.byte(17+palSize*3)
 	f.title = data.utf8(18+palSize*3, titleLen)
-	print f.title
+	//print f.title
 	pos = 18 + palSize*3 + titleLen
 	
 	// Read ASCII characters
@@ -350,6 +350,23 @@ Font.charData = function(c)
 	return null	
 end function
 
+// Add a new character to this font.  Parameters are as follows:
+//	c: character (string) to add
+//	image: image of the character glyph
+//	relX, relY: where to draw this image relative to the baseline cursor
+//  shift: how much to move the baseline cursor after drawing;
+//		if null, this defaults to image.width
+Font.addChar = function(c, image, relX=0, relY=0, shift=null)
+	if shift == null then shift = image.width
+	cd = new CharData
+	cd.charCode = c.code
+	cd.image = image
+	cd.width = image.width; cd.height = image.height
+	cd.relX = relX; cd.relY = relY
+	cd.shift = shift
+	self.chars[c] = cd
+end function
+
 // Render the given character into any drawing context 'g'
 // which has setPixel method.  This includes both Image
 // and PixelDisplay.  Note that for character 'c' you can
@@ -407,7 +424,7 @@ end function
 // far to shift the cursor.  This uses the image cache, so
 // it gets faster after the first drawing of each character.
 Font.printChar = function(c, x=480, y=320, scale=1, tint="#FFFFFF")
-	d = self.charData(c)
+	d = self.charData(str(c))
 	if d == null then return 0
 	if d.image == null and d.width > 0 then d.image = self.makeCharImage(c)
 	x = x + d.relX
@@ -427,6 +444,7 @@ end function
 
 // Print the given string to gfx at the given location.
 Font.print = function(s, x=20, y=320, scale=1, tint="#FFFFFF")
+	s = str(s)
 	lastc = ""
 	for c in s
 		x = x + self.kern(lastc, c) * scale
@@ -435,8 +453,21 @@ Font.print = function(s, x=20, y=320, scale=1, tint="#FFFFFF")
 	end for
 end function
 
+// Print the given string to gfx, centered horizontally on the given x.
+Font.printCentered = function(s, x=480, y=320, scale=1, tint="#FFFFFF")
+	s = str(s)
+	self.print s, x - self.width(s, scale)/2, y, scale, tint
+end function
+
+// Print the given string to gfx, right-aligned on x.
+Font.printRight = function(s, x=940, y=320, scale=1, tint="#FFFFFF")
+	s = str(s)
+	self.print s, x - self.width(s, scale), y, scale, tint
+end function
+
 // Return the width of the given string in this font.
 Font.width = function(s, scale=1)
+	s = str(s)
 	sum = 0
 	lastc = ""
 	for c in s
@@ -448,13 +479,32 @@ Font.width = function(s, scale=1)
 	return sum
 end function
 
+// Return the number of characters of the given string that
+// fit a given width.
+Font.lenToFit = function(s, width=100)
+	if not s or not (s isa string) then return 0
+	if self.width(s) <= width then return s.len
+	lo = 1
+	hi = s.len
+	while lo + 1 < hi
+		mid = floor((lo + hi) / 2)
+		if self.width(s[:mid]) <= width then
+			lo = mid
+		else
+			hi = mid
+		end if
+	end while
+	return lo
+end function
+
 // Demo program: find the fonts directory, then load and display
 // every font found therein.
 demo = function()
 	clear; text.row = 10
 	
-	fontsFolder = "fonts/fonts"
-	if not file.exists(fontsFolder) then fontsFolder = "fonts"
+	fontsFolder = "fonts"
+	if not file.exists(fontsFolder) then fontsFolder = "/usr/fonts"
+	if not file.exists(fontsFolder) then fontsFolder = "/sys/fonts"
 	if not file.exists(fontsFolder) then
 		print "Unable to locate fonts folder."
 		return
