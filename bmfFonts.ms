@@ -81,7 +81,7 @@ end function
 
 // Font class, storing all data about a particular font.
 Font = {}
-CharData._name = "bmfFonts.Font";
+Font._name = "bmfFonts.Font";
 Font.data = null	// raw data from file
 Font.chars = null   // key: character; value: charData map
 Font.kernMap = null  // key: char1; value: map from char2->kern
@@ -497,6 +497,21 @@ Font.lenToFit = function(s, width=100)
 	return lo
 end function
 
+boxesSample = [
+"┌─┬┐  ╔═╦╗  ╓─╥╖  ╒═╤╕",
+"│ ││  ║ ║║  ║ ║║  │ ││",
+"├─┼┤  ╠═╬╣  ╟─╫╢  ╞═╪╡",
+"└─┴┘  ╚═╩╝  ╙─╨╜  ╘═╧╛",
+"┌───────────────────┐",
+"│  ╔═══╗ Some Text  │▒",
+"│  ╚═╦═╝ in the box │▒",
+"╞═╤══╩══╤═══════════╡▒",
+"│ ├──┬──┤           │▒",
+"│ └──┴──┘           │▒",
+"└───────────────────┘▒",
+" ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒",
+]
+
 // Demo program: find the fonts directory, then load and display
 // every font found therein.
 demo = function()
@@ -527,6 +542,30 @@ demo = function()
 		lastFont = f
 	end for
 	text.row = 0
+	
+	boxes = []
+	for c in range(9472, 9727)
+		boxes.push char(c)
+	end for
+	
+	for fontFile in ["fonts/minimicro-mono-boxes-12.bmf", "fonts/minimicro-mono-boxes-16.bmf", "fonts/minimicro-mono-boxes-20.bmf"]
+		input "[Press Return]"
+		clear
+		print fontFile
+		fnt = Font.load(fontFile)
+		charsPerLine = floor(960 / fnt.chars.A.width / 2)
+		y = 550
+		for i in range(0, boxes.len, charsPerLine)
+			line = boxes[i : i + charsPerLine].join(" ")
+			y -= (fnt.chars.A.height + 10)
+			fnt.print line, 0, y, 1, color.rgb(rnd*250, rnd*250, rnd*250)
+		end for
+		y -= 50
+		clr = color.rgb(rnd*250, rnd*250, rnd*250)
+		for i in boxesSample.indexes
+			fnt.print boxesSample[i], 100, y - i * fnt.chars.A.height, 1, clr
+		end for
+	end for
 end function
 
 if locals == globals then demo
