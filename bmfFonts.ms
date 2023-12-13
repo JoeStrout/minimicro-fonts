@@ -544,7 +544,7 @@ demo = function()
 	text.row = 0
 	
 	boxes = []
-	for c in range(9472, 9679)
+	for c in range(9472, 9727)
 		boxes.push char(c)
 	end for
 	
