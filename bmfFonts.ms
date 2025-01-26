@@ -137,7 +137,6 @@ Font.load = function(path)
 	// Read ASCII characters
 	numAsciiChars = data.short(pos)
 	pos = pos + 2
-	print numAsciiChars + " ASCII characters"
 	
 	for i in range(1, numAsciiChars, 1)
 		// Read one character
@@ -247,7 +246,7 @@ Font.save = function(path)
 	if not self.hasIndex("usedColors") then self.usedColors = self.palette.len
 	if not self.hasIndex("highestUsedColor") then self.highestUsedColor = self.palette.len
 	
-	print "Saving version " +self.version + " file with " + highCharCount + " high chars"
+//	print "Saving version " +self.version + " file with " + highCharCount + " high chars"
 	
 	paletteMap = {}  // key: color (sans alpha); value: color index + 1
 	for i in self.palette.indexes
@@ -527,7 +526,9 @@ demo = function()
 	
 	y = 640
 	lastFont = null
-	for fontFile in file.children(fontsFolder)
+	fontFiles = file.children(fontsFolder)
+	fontFiles.sort
+	for fontFile in fontFiles
 		if fontFile[-4:] != ".bmf" then continue
 		f = Font.load(file.child(fontsFolder, fontFile))
 		if f == null then	continue
@@ -538,7 +539,7 @@ demo = function()
 			y = y + dy
 		end if
 		f.print fontFile + ": " + f.title, 10, y + f.sizeOver
-		y = y - f.lineHeight - 4		
+		y = y - f.lineHeight - 4
 		lastFont = f
 	end for
 	text.row = 0
@@ -549,10 +550,11 @@ demo = function()
 	end for
 	
 	for fontFile in ["fonts/minimicro-mono-boxes-12.bmf", "fonts/minimicro-mono-boxes-16.bmf", "fonts/minimicro-mono-boxes-20.bmf"]
+		fnt = Font.load(fontFile)
+		if fnt == null then continue
 		input "[Press Return]"
 		clear
 		print fontFile
-		fnt = Font.load(fontFile)
 		charsPerLine = floor(960 / fnt.chars.A.width / 2)
 		y = 550
 		for i in range(0, boxes.len, charsPerLine)
@@ -561,7 +563,7 @@ demo = function()
 			fnt.print line, 0, y, 1, color.rgb(rnd*250, rnd*250, rnd*250)
 		end for
 		y -= 50
-		clr = color.rgb(rnd*250, rnd*250, rnd*250)
+		clr = color.rgb(100+rnd*150, 100+rnd*150, 100+rnd*250)
 		for i in boxesSample.indexes
 			fnt.print boxesSample[i], 100, y - i * fnt.chars.A.height, 1, clr
 		end for
