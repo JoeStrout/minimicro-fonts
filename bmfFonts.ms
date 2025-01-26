@@ -139,7 +139,7 @@ Font.load = function(path)
 	pos = pos + 2
 	print numAsciiChars + " ASCII characters"
 	
-	for i in range(1, numAsciiChars)
+	for i in range(1, numAsciiChars, 1)
 		// Read one character
 		p0 = pos
 		charData = new CharData
@@ -154,7 +154,7 @@ Font.load = function(path)
 	// Read non-ASCII characters
 	numOtherChars = data.uint(pos)
 	pos = pos + 4
-	for i in range(1, numOtherChars)
+	for i in range(1, numOtherChars, 1)
 		// Read one character
 		charData = new CharData
 		charData.charCode = data.uint(pos)
@@ -170,7 +170,7 @@ Font.load = function(path)
 	//print kernCount + " kerning pairs"
 	if kernCount > 0 then
 		pos = pos + 2
-		for i in range(1, kernCount)
+		for i in range(1, kernCount, 1)
 			c1 = data.uint(pos)
 			c2 = data.uint(pos+4)
 			k = data.short(pos+8)
