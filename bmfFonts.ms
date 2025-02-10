@@ -56,9 +56,12 @@ CharData.findColorsFromImage = function(paletteMap, alphaBits)
 				colorIdx = 0
 			end if
 			if alphaBits == 8 then
-				// when alphaBits is 0, ignore the actual color
+				// when alphaBits is 8, ignore the actual color
 				// and just store the alpha instead.
 				colorIdx = hexStrToInt[alpha]
+			else if alphaBits == 0 then
+				// and when it's 0, still skip (use index 0 for) any transparent pixel
+				if alpha == "00" then colorIdx = 0
 			end if
 			self.colors.push colorIdx
 		end for
@@ -73,10 +76,12 @@ CharData.save = function(stream, paletteMap, alphaBits)
 	stream.writeByte self.relX
 	stream.writeByte self.relY
 	stream.writeByte self.shift
-	self.findColorsFromImage paletteMap, alphaBits
-	for c in self.colors
-		stream.writeByte c
-	end for
+	if self.width or self.height then
+		self.findColorsFromImage paletteMap, alphaBits
+		for c in self.colors
+			stream.writeByte c
+		end for
+	end if
 end function
 
 // Font class, storing all data about a particular font.
@@ -277,7 +282,7 @@ Font.save = function(path)
 	data.writeByte self.highestUsedColor
 	if self.version > 1.1 then
 		data.writeByte self.alphaBits
-		data.writeByte self.numPalettes
+		data.writeByte self.numPalettes - 1
 	else
 		data.pos = data.pos + 2
 	end if
