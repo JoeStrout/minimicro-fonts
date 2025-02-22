@@ -434,11 +434,11 @@ Font.printChar = function(c, x=480, y=320, scale=1, tint="#FFFFFF")
 	x = x + d.relX
 	if d.image != null then
 		if scale == 1 then
-			y = y - self.sizeOver - d.relY - d.image.height
+			y = y - self.sizeOver - self.sizeUnder - d.relY - d.image.height
 			gfx.drawImage d.image, x, y, d.image.width, d.image.height,
 			  0, 0, d.image.width, d.image.height, tint
 		else
-			y = y + scale * (-self.sizeOver - d.relY - d.image.height)
+			y = y + scale * (-self.sizeOver - self.sizeUnder - d.relY - d.image.height)
 			gfx.drawImage d.image, x, y, d.image.width*scale, d.image.height*scale,
 			  0, 0, d.image.width, d.image.height, tint
 		end if

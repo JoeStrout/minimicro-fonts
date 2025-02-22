@@ -1,0 +1,18 @@
+Images in this pics folder are glyph images for use with the util/fontFromImage script.
+
+They all come from OpenGameArt:
+
+digital_font_sheet.png:
+	https://opengameart.org/content/digital-font
+
+sonic_asalga.png:
+	https://opengameart.org/content/sonic-font
+
+ShinyFont_Jerom_CCBYSA3.png:
+https://opengameart.org/content/shiny-font
+
+gnsh-bitmap-5x12.png:
+	https://opengameart.org/content/bitmap-font-0
+
+JROB774 Font 18x32.png:
+	https://opengameart.org/content/pixel-block-font
