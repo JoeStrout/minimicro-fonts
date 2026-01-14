@@ -1,0 +1,17 @@
+yaff: 1.0
+name: Metrics Test
+spacing: proportional
+ascent: 6
+descent: 2
+
+u+0041:
+    .@@.
+    @..@
+    @@@.
+    @..@
+    @...
+    @...
+    
+    left-bearing: 1
+    right-bearing: 1
+    shift-up: 4

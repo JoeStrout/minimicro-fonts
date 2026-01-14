@@ -107,6 +107,629 @@ end function
 // Call this on the Font class itself (i.e. not an instance).
 // Pass in the path to the font file; get back a new Font object.
 Font.load = function(path)
+	ext = path.split(".")[-1].lower
+	if ext == "bmf" then
+		return Font.loadBMF(path)
+	else if ext == "yaff" then
+		return Font.loadYAFF(path)
+	end if
+	print "Font.load: unrecognized font file extension: " + ext
+	return null
+end function
+
+
+Font.loadYAFF = function(path)
+	// Load a YAFF font file (Yet Another Font Format).
+	// https://github.com/robhagemans/monobit/blob/master/YAFF.md
+	
+	// Read file as UTF-8 text
+	lines = file.readLines(path)
+	if lines == null then
+		print "Font.loadYAFF: Unable to read YAFF file at " + path
+		return null
+	end if
+	
+	// Helper: Check if line is blank or whitespace-only
+	isBlank = function(line)
+		if not line then return true
+		for i in range(0, line.len - 1)
+			c = line[i]
+			if c != " " and c != char(9) then return false
+		end for
+		return true
+	end function
+	
+	// Helper: Check if line is comment (starts with #)
+	isComment = function(line)
+		if not line then return false
+		for i in range(0, line.len - 1)
+			c = line[i]
+			if c == "#" then return true
+			if c != " " and c != char(9) then return false
+		end for
+		return false
+	end function
+	
+	// Helper: Get leading whitespace indent level
+	getIndent = function(line)
+		if not line then return 0
+		indent = 0
+		for i in range(0, line.len - 1)
+			c = line[i]
+			if c == " " or c == char(9) then
+				indent = indent + 1
+			else
+				return indent
+			end if
+		end for
+		return indent
+	end function
+	
+	// Helper: Strip leading/trailing whitespace
+	strip = function(s)
+		if not s then return ""
+		start = 0
+		while start < s.len and (s[start] == " " or s[start] == char(9))
+			start = start + 1
+		end while
+		if start >= s.len then return ""
+		endPos = s.len - 1
+		while endPos >= start and (s[endPos] == " " or s[endPos] == char(9))
+			endPos = endPos - 1
+		end while
+		return s[start:endPos + 1]
+	end function
+	
+	// Helper: Check if string is property key format (letters, digits, underscore, dash, dot)
+	isPropertyKey = function(s)
+		if not s then return false
+		for i in range(0, s.len - 1)
+			c = s[i]
+			isValid = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or
+			          (c >= "0" and c <= "9") or c == "_" or c == "-" or c == "."
+			if not isValid then return false
+		end for
+		return true
+	end function
+	
+	// Helper: Parse a glyph label and return character string (or null on error)
+	// Returns map: {char: "A", code: 65, lineNum: N}
+	parseLabel = function(label, lineNum)
+		label = strip(label)
+		if not label then return null
+		
+		result = {}
+		
+		// Check for u+XXXX format
+		if label.len > 2 and (label[:2] == "u+" or label[:2] == "U+") then
+			hexPart = label[2:]
+			codepoint = hexVal(hexPart) //hexToInt(hexPart)
+			if codepoint == null then
+				print "Font.loadYAFF: Invalid hex codepoint " + label + " at line " + lineNum
+				return null
+			end if
+			result.char = char(codepoint)
+			result.code = codepoint
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for 0xXX format
+		if label.len > 2 and (label[:2] == "0x" or label[:2] == "0X") then
+			hexPart = label[2:]
+			codepoint = hexVal(hexPart) // hexToInt(hexPart)
+			if codepoint == null then
+				print "Font.loadYAFF: Invalid hex codepoint " + label + " at line " + lineNum
+				return null
+			end if
+			result.char = char(codepoint)
+			result.code = codepoint
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for 0oXX octal format (parse as decimal for simplicity, rare)
+		if label.len > 2 and (label[:2] == "0o" or label[:2] == "0O") then
+			// Simplified: treat as decimal for now (octal is rare)
+			codepoint = label[2:].val
+			if codepoint == null then
+				print "Font.loadYAFF: Invalid octal codepoint " + label + " at line " + lineNum
+				return null
+			end if
+			result.char = char(codepoint)
+			result.code = codepoint
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for decimal number
+		if label[0] >= "0" and label[0] <= "9" then
+			codepoint = label.val
+			if codepoint == null then
+				print "Font.loadYAFF: Invalid decimal codepoint " + label + " at line " + lineNum
+				return null
+			end if
+			result.char = char(codepoint)
+			result.code = codepoint
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for 'char' format (single quotes)
+		if label[0] == "'" and label[-1] == "'" and label.len >= 2 then
+			content = label[1:-1]
+			if content.len == 0 then return null
+			// Use first character only for multi-char sequences
+			result.char = content[0]
+			result.code = content[0].code
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for "tag" format (double quotes)
+		if label[0] == char(34) and label[-1] == char(34) and label.len >= 2 then
+			content = label[1:-1]
+			if content.len == 0 then return null
+			// Tag: use string as-is, charCode = 0
+			result.char = content
+			result.code = 0
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		// Check for bare word tag (alphanumeric, underscore, hyphen)
+		// e.g., "default", "placeholder_d7"
+		isValidBareWord = true
+		for i in range(0, label.len - 1)
+			c = label[i]
+			isAlphaNum = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9")
+			if not isAlphaNum and c != "_" and c != "-" then
+				isValidBareWord = false
+				break
+			end if
+		end for
+		if isValidBareWord and label.len > 0 then
+			// Bare word tag
+			result.char = label
+			result.code = 0
+			result.lineNum = lineNum
+			return result
+		end if
+		
+		return null
+	end function
+	
+	// PASS 1: Parse global properties
+	globalProps = {}
+	lineNum = 0
+	firstGlyphLine = -1
+	
+	while lineNum < lines.len
+		line = lines[lineNum]
+		lineNum = lineNum + 1
+		
+		// Skip blank lines and comments
+		if isBlank(line) or isComment(line) then continue
+		
+		// Check if this is a glyph label (starts parsing in Pass 2)
+		if line.indexOf(":") != null then
+			colonPos = line.indexOf(":")
+			beforeColon = line[:colonPos]
+			
+			// Check if this looks like a glyph label
+			beforeStripped = strip(beforeColon)
+			if beforeStripped and (beforeStripped[0] == "u" or beforeStripped[0] == "U" or
+			   beforeStripped[0] == "0" or (beforeStripped[0] >= "1" and beforeStripped[0] <= "9") or
+			   beforeStripped[0] == "'" or beforeStripped[0] == char(34)) then
+				// This is a glyph label, stop Pass 1
+				firstGlyphLine = lineNum - 1
+				break
+			end if
+			
+			// Check if this is a property key
+			if isPropertyKey(beforeStripped) then
+				key = beforeStripped.lower  // case-insensitive
+				valueStart = colonPos + 1
+				value = ""
+				
+				// Check if value is on same line
+				if valueStart < line.len then
+					value = strip(line[valueStart:])
+				end if
+				
+				// If no value or value is empty, check for multi-line continuation
+				if not value then
+					valueLines = []
+					while lineNum < lines.len
+						nextLine = lines[lineNum]
+						if isBlank(nextLine) then
+							lineNum = lineNum + 1
+							break
+						end if
+						nextIndent = getIndent(nextLine)
+						if nextIndent == 0 then break
+						// This is a continuation line
+						lineNum = lineNum + 1
+						stripped = strip(nextLine)
+						// Strip surrounding quotes if present
+						if stripped.len >= 2 and stripped[0] == char(34) and stripped[-1] == char(34) then
+							stripped = stripped[1:-1]
+						end if
+						valueLines.push stripped
+					end while
+					value = valueLines.join(char(10))
+				end if
+				
+				globalProps[key] = value
+			end if
+		end if
+	end while
+	
+	// Initialize Font object with global properties
+	f = new Font
+	f.version = 1.1
+	if globalProps.hasIndex("name") then
+		f.title = globalProps["name"]
+	else
+		f.title = "YAFF Font"
+	end if
+	f.palette = ["#FFFFFF"]
+	f.alphaBits = 0
+	f.chars = {}
+	f.kernMap = null
+	f.addSpace = 0
+	f.sizeInner = 0
+	f.usedColors = 1
+	f.highestUsedColor = 1
+	f.numPalettes = 1
+	f.data = null
+	
+	if globalProps.hasIndex("direction") then
+		f.direction = globalProps["direction"]
+	else
+		f.direction = null
+	end if
+	
+	if globalProps.hasIndex("spacing") then
+		f.spacing = globalProps["spacing"]
+	else
+		f.spacing = null
+	end if
+	
+	// PASS 2: Parse glyph definitions
+	if firstGlyphLine < 0 then
+		// No glyphs, just return font with defaults
+		f.lineHeight = 12
+		f.sizeOver = 10
+		f.sizeUnder = 2
+		return f
+	end if
+	
+	lineNum = firstGlyphLine
+	cellWidth = null  // For monospace inference
+	firstNonEmptyWidth = null
+	
+	// Track metrics for calculation
+	allHeights = []
+	allShiftUps = []
+	
+	while lineNum < lines.len
+		line = lines[lineNum]
+		
+		// Skip blank lines and comments
+		if isBlank(line) or isComment(line) then
+			lineNum = lineNum + 1
+			continue
+		end if
+		
+		// Check for glyph label line (must contain ':')
+		colonPos = line.indexOf(":")
+		if colonPos == null then
+			lineNum = lineNum + 1
+			continue
+		end if
+		
+		// Parse label(s) before colon
+		labelPart = line[:colonPos]
+		labels = []
+		
+		// Handle multiple labels separated by commas
+		if labelPart.indexOf(",") != null then
+			parts = labelPart.split(",")
+			for part in parts
+				labelInfo = parseLabel(part, lineNum + 1)
+				if labelInfo then labels.push labelInfo
+			end for
+		else
+			labelInfo = parseLabel(labelPart, lineNum + 1)
+			if labelInfo then labels.push labelInfo
+		end if
+		
+		if labels.len == 0 then
+			print "Font.loadYAFF: Malformed glyph label at line " + (lineNum + 1) + ": expected valid label"
+			return null
+		end if
+		
+		// Use first label only (TODO: support multi-label aliasing)
+		primaryLabel = labels[0]
+		if not primaryLabel or not primaryLabel.hasIndex("char") then
+			print "Font.loadYAFF: Invalid label structure at line " + (lineNum + 1) + ": " + str(primaryLabel)
+			return null
+		end if
+		glyphChar = primaryLabel.char
+		glyphCode = primaryLabel.code
+		
+		lineNum = lineNum + 1
+		
+		// Parse bitmap lines (indented)
+		bitmapLines = []
+		bitmapIndent = -1
+		
+		while lineNum < lines.len
+			line = lines[lineNum]
+			if isBlank(line) then
+				lineNum = lineNum + 1
+				break
+			end if
+			if isComment(line) then
+				lineNum = lineNum + 1
+				continue
+			end if
+			
+			indent = getIndent(line)
+			if indent == 0 then break
+			
+			if bitmapIndent < 0 then bitmapIndent = indent
+			
+			stripped = strip(line)
+			
+			// Check for empty glyph marker
+			if stripped == "-" then
+				lineNum = lineNum + 1
+				bitmapLines = []
+				break
+			end if
+			
+			// Validate bitmap characters (only . and @)
+			for i in range(0, stripped.len - 1)
+				c = stripped[i]
+				if c != "." and c != "@" then
+					print "Font.loadYAFF: Invalid bitmap character at line " + (lineNum + 1) + ": only '.' and '@' allowed"
+					return null
+				end if
+			end for
+			
+			// Check if this might be a per-glyph property instead
+			if stripped.indexOf(":") != null then
+				colonPos = stripped.indexOf(":")
+				possibleKey = strip(stripped[:colonPos])
+				if isPropertyKey(possibleKey) then
+					// This is a property line, stop bitmap parsing
+					break
+				end if
+			end if
+			
+			bitmapLines.push stripped
+			lineNum = lineNum + 1
+		end while
+		
+		// Parse per-glyph properties (skip any leading blank lines first)
+		while lineNum < lines.len and isBlank(lines[lineNum])
+			lineNum = lineNum + 1
+		end while
+		
+		glyphProps = {}
+		while lineNum < lines.len
+			line = lines[lineNum]
+			if isBlank(line) then
+				lineNum = lineNum + 1
+				continue
+			end if
+			if isComment(line) then
+				lineNum = lineNum + 1
+				continue
+			end if
+			
+			indent = getIndent(line)
+			if indent == 0 then break
+			
+			stripped = strip(line)
+			colonPos = stripped.indexOf(":")
+			if colonPos == null then break
+			
+			key = strip(stripped[:colonPos])
+			if not isPropertyKey(key) then break
+			
+			value = strip(stripped[colonPos + 1:])
+			glyphProps[key.lower] = value
+			lineNum = lineNum + 1
+		end while
+		
+		// Create CharData from bitmap
+		cd = new CharData
+		cd.charCode = glyphCode
+		
+		if bitmapLines.len == 0 then
+			// Empty glyph
+			cd.width = 0
+			cd.height = 0
+			cd.colors = []
+		else
+			// Validate consistent width
+			cd.width = bitmapLines[0].len
+			cd.height = bitmapLines.len
+			
+			for i in range(0, bitmapLines.len - 1)
+				if bitmapLines[i].len != cd.width then
+					print "Font.loadYAFF: Inconsistent glyph width at line " + (lineNum - bitmapLines.len + i + 1) + " (expected " + cd.width + ", got " + bitmapLines[i].len + ")"
+					return null
+				end if
+			end for
+			
+			// Convert bitmap to colors array (reverse row order: bottom-to-top)
+			cd.colors = []
+			for row in range(0, cd.height - 1)
+				lineStr = bitmapLines[row]
+				for col in range(0, cd.width - 1)
+					if lineStr[col] == "@" then
+						cd.colors.push 1
+					else
+						cd.colors.push 0
+					end if
+				end for
+			end for
+			
+			// Track first non-empty glyph width for monospace inference
+			if firstNonEmptyWidth == null and cd.width > 0 then
+				firstNonEmptyWidth = cd.width
+			end if
+		end if
+		
+		// Parse positioning metrics
+		leftBearing = 0
+		rightBearing = 0
+		shiftUp = 0
+		
+		if glyphProps.hasIndex("left-bearing") then
+			leftBearing = glyphProps["left-bearing"].val
+			if leftBearing == null then leftBearing = 0
+		end if
+		
+		if glyphProps.hasIndex("right-bearing") then
+			rightBearing = glyphProps["right-bearing"].val
+			if rightBearing == null then rightBearing = 0
+		end if
+		
+		if glyphProps.hasIndex("shift-up") then
+			shiftUp = glyphProps["shift-up"].val
+			if shiftUp == null then shiftUp = 0
+		end if
+		
+		// Calculate CharData positioning
+		cd.relX = leftBearing
+		cd.relY = -(shiftUp + cd.height)
+		
+		// Calculate shift (advance width) - will be refined after we know if monospace
+		cd.shift = leftBearing + cd.width + rightBearing
+		if cd.shift <= 0 and cd.width > 0 then cd.shift = cd.width
+		
+		// Store temporary shift-up for metric calculation
+		cd._tempShiftUp = shiftUp
+		
+		// Track metrics
+		if cd.height > 0 then
+			allHeights.push cd.height
+			allShiftUps.push shiftUp
+		end if
+		
+		// Parse kerning
+		if glyphProps.hasIndex("right-kerning") then
+			kernStr = glyphProps["right-kerning"]
+			// Split by comma
+			pairs = kernStr.split(",")
+			for pair in pairs
+				pair = strip(pair)
+				if not pair then continue
+				// Split by whitespace - filter out empty parts
+				allParts = pair.split(" ")
+				parts = []
+				for p in allParts
+					if p then parts.push p
+				end for
+				if parts.len >= 2 then
+					targetLabel = strip(parts[0])
+					kernValueStr = strip(parts[1])
+					if not targetLabel or not kernValueStr then continue
+					kernValue = kernValueStr.val
+					if kernValue != null then
+						targetInfo = parseLabel(targetLabel, lineNum)
+						if targetInfo and targetInfo.hasIndex("char") then
+							f.setKern glyphChar, targetInfo.char, kernValue
+						end if
+					end if
+				end if
+			end for
+		end if
+		
+		// Store CharData in font
+		f.chars[glyphChar] = cd
+	end while
+	
+	// Calculate font-level metrics
+	if globalProps.hasIndex("line-height") then
+		f.lineHeight = globalProps["line-height"].val
+		if f.lineHeight == null then f.lineHeight = 12
+	else if allHeights.len > 0 then
+		maxHeight = 0
+		minShift = 0
+		for h in allHeights
+			if h > maxHeight then maxHeight = h
+		end for
+		for s in allShiftUps
+			if s < minShift then minShift = s
+		end for
+		f.lineHeight = maxHeight + (0 - minShift) + 1
+	else
+		f.lineHeight = 12
+	end if
+	
+	if globalProps.hasIndex("ascent") then
+		f.sizeOver = globalProps["ascent"].val
+		if f.sizeOver == null then f.sizeOver = 10
+	else if allShiftUps.len > 0 and allHeights.len > 0 then
+		maxValue = 0
+		for i in range(0, allShiftUps.len - 1)
+			value = allShiftUps[i] + allHeights[i]
+			if value > maxValue then maxValue = value
+		end for
+		f.sizeOver = maxValue
+	else
+		f.sizeOver = 10
+	end if
+	
+	if globalProps.hasIndex("descent") then
+		f.sizeUnder = globalProps["descent"].val
+		if f.sizeUnder == null then f.sizeUnder = 2
+	else if allShiftUps.len > 0 then
+		minShift = 0
+		for s in allShiftUps
+			if s < minShift then minShift = s
+		end for
+		f.sizeUnder = 0 - minShift
+		if f.sizeUnder < 1 then f.sizeUnder = 1
+	else
+		f.sizeUnder = 2
+	end if
+	
+	// Determine monospace cellWidth and update shifts
+	if f.spacing == "monospace" or f.spacing == "character-cell" or f.spacing == "multi-cell" then
+		// Monospace: use uniform advance width
+		if globalProps.hasIndex("cell-size") then
+			cellWidth = globalProps["cell-size"].val
+			if cellWidth == null then cellWidth = 8
+		else if firstNonEmptyWidth != null then
+			cellWidth = firstNonEmptyWidth
+		else
+			cellWidth = 8
+		end if
+		
+		// Update all glyphs to use uniform shift
+		for kv in f.chars
+			kv.value.shift = cellWidth
+		end for
+	end if
+	
+	// Clean up temporary properties
+	for kv in f.chars
+		if kv.value.hasIndex("_tempShiftUp") then
+			kv.value.remove "_tempShiftUp"
+		end if
+	end for
+	
+	return f
+end function
+
+Font.loadBMF = function(path)
 	data = file.loadRaw(path)
 	if data == null then return null
 	
@@ -185,11 +808,24 @@ Font.load = function(path)
 	return f
 end function
 
+Font.save = function(path)
+	ext = path.split(".")[-1].lower
+	if ext == "bmf" then
+		self.saveBMF path
+	else
+		print "Font.save: unrecognized font file extension: " + ext
+	end if
+end function
+
+Font.saveYAFF = function(path)
+	// Save this font in YAFF format (Yet Another Font Format).
+end function
+
 // Font.save: Save this font to disk, in either version 1.1
 // or version 1.2 format (depending on self.version).  Note
 // that this method ignores self.data, and creates new data
 // from the current font attributes and character data.
-Font.save = function(path)
+Font.saveBMF = function(path)
 	// We'll need a little BinaryStream class wrapping a RawData,
 	// to make it easier.  This just expands the RawData buffer as we go.
 	BinaryStream = {}
@@ -430,9 +1066,11 @@ end function
 Font.printChar = function(c, x=480, y=320, scale=1, tint="#FFFFFF")
 	d = self.charData(str(c))
 	if d == null then return 0
-	if d.image == null and d.width > 0 then d.image = self.makeCharImage(c)
+	if not d.hasIndex("image") or d.image == null then
+		if d.width > 0 then d.image = self.makeCharImage(c)
+	end if
 	x = x + d.relX
-	if d.image != null then
+	if d.hasIndex("image") and d.image != null then
 		if scale == 1 then
 			y = y - self.sizeOver - self.sizeUnder - d.relY - d.image.height
 			gfx.drawImage d.image, x, y, d.image.width, d.image.height,
