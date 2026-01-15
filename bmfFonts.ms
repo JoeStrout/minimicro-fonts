@@ -44,7 +44,8 @@ for i in range(0,255); hexStrToInt[hex2(i)] = i; end for
 // Note that an index of 0 always means "don't draw" (transparent).
 // Also, this function has no effect if self.image is null.
 CharData.findColorsFromImage = function(paletteMap, alphaBits)
-	if not self.image then return
+	// YAFF-loaded fonts don't have an image property, only colors array
+	if not self.hasIndex("image") or not self.image then return
 	self.colors = []
 	for bitmapY in range(self.height - 1)
 		for bitmapX in range(0, self.width - 1)
@@ -490,16 +491,7 @@ Font.loadYAFF = function(path)
 				break
 			end if
 			
-			// Validate bitmap characters (only . and @)
-			for i in range(0, stripped.len - 1)
-				c = stripped[i]
-				if c != "." and c != "@" then
-					print "Font.loadYAFF: Invalid bitmap character at line " + (lineNum + 1) + ": only '.' and '@' allowed"
-					return null
-				end if
-			end for
-			
-			// Check if this might be a per-glyph property instead
+			// Check if this might be a per-glyph property instead (BEFORE validating bitmap)
 			if stripped.indexOf(":") != null then
 				colonPos = stripped.indexOf(":")
 				possibleKey = strip(stripped[:colonPos])
@@ -508,6 +500,15 @@ Font.loadYAFF = function(path)
 					break
 				end if
 			end if
+			
+			// Validate bitmap characters (only . and @)
+			for i in range(0, stripped.len - 1)
+				c = stripped[i]
+				if c != "." and c != "@" then
+					print "Font.loadYAFF: Invalid bitmap character at line " + (lineNum + 1) + ": only '.' and '@' allowed"
+					return null
+				end if
+			end for
 			
 			bitmapLines.push stripped
 			lineNum = lineNum + 1
