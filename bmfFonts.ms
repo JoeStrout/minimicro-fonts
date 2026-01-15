@@ -812,13 +812,220 @@ Font.save = function(path)
 	ext = path.split(".")[-1].lower
 	if ext == "bmf" then
 		self.saveBMF path
+	else if ext == "yaff" then
+		self.saveYAFF path
 	else
 		print "Font.save: unrecognized font file extension: " + ext
 	end if
 end function
 
 Font.saveYAFF = function(path)
-	// Save this font in YAFF format (Yet Another Font Format).
+    // Save this font in YAFF format (Yet Another Font Format).
+    // https://github.com/robhagemans/monobit/blob/master/YAFF.md
+    
+    // Helper: Format a character label for YAFF output
+    formatLabel = function(charCode, charStr)
+        // Check if this is a preserved tag
+        if charCode == 0 then
+            // Tag - return bare word or quoted
+            isBarWord = true
+            for i in range(0, charStr.len - 1)
+                c = charStr[i]
+                isAlphaNum = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9")
+                if not isAlphaNum and c != "_" and c != "-" then
+                    isBarWord = false
+                    break
+                end if
+            end for
+            if isBarWord then return charStr else return char(34) + charStr + char(34)
+        end if
+        
+        // For high Unicode, use u+XXXX format
+        if charCode > 255 then return "u+" + hex2(charCode)
+        
+        // For ASCII range, use 0xXX format
+        return "0x" + hex2(charCode)
+    end function
+    
+    // Helper: Convert BMF colors array to YAFF bitmap lines
+    bitmapToLines = function(colors, width, height)
+        if width == 0 or height == 0 then return []
+        lines = []
+        // Reverse row order: BMF is bottom-to-top, YAFF is top-to-bottom
+        for row in range(0, height - 1)
+            line = ""
+            for col in range(0, width - 1)
+                idx = row * width + col
+                if idx < colors.len then
+                    c = colors[idx]
+                    if c == 0 then
+                        line = line + "."
+                    else
+                        line = line + "@"
+                    end if
+                else
+                    line = line + "."
+                end if
+            end for
+            lines.push line
+        end for
+        return lines
+    end function
+    
+    // Helper: Detect if font is monospace
+    detectMonospace = function(font, chars)
+        // Check preserved spacing property first
+        if font.hasIndex("spacing") and font.spacing != null then
+            if font.spacing == "monospace" or font.spacing == "character-cell" or font.spacing == "multi-cell" then
+                // Return cell size if available, otherwise detect
+                if font.chars.len == 0 then return 8
+                for cd in font.chars.values
+                    if cd.width > 0 then return cd.shift
+                end for
+                return 8
+            end if
+            if font.spacing == "proportional" then return null
+        end if
+        
+        // Analyze shift values
+        if chars.len == 0 then return null
+        firstShift = null
+        for cd in chars.values
+            if cd.width == 0 then continue
+            if firstShift == null then
+                firstShift = cd.shift
+            else if cd.shift != firstShift then
+                return null  // Variable shifts = proportional
+            end if
+        end for
+        return firstShift
+    end function
+    
+    // Build output line by line
+    output = []
+    
+    // Header
+    output.push "yaff: 1.0"
+    
+    // Global properties
+    if self.hasIndex("title") and self.title then
+        output.push "name: " + self.title
+    end if
+    
+    // Detect spacing mode
+    cellSize = detectMonospace(self, self.chars)
+    isMonospace = (cellSize != null)
+    
+    if isMonospace then
+        output.push "spacing: monospace"
+        output.push "cell-size: " + cellSize
+    else
+        output.push "spacing: proportional"
+    end if
+    
+    // Font metrics
+    if self.hasIndex("lineHeight") then
+        output.push "line-height: " + self.lineHeight
+    end if
+    if self.hasIndex("sizeOver") then
+        output.push "ascent: " + self.sizeOver
+    end if
+    if self.hasIndex("sizeUnder") then
+        output.push "descent: " + self.sizeUnder
+    end if
+    
+    // Optional properties
+    if self.hasIndex("direction") and self.direction != null then
+        output.push "direction: " + self.direction
+    end if
+    
+    // Blank line after global properties
+    output.push ""
+    
+    // Sort characters by charCode for consistent output
+    charList = []
+    for c in self.chars.indexes
+        charList.push c
+    end for
+    // Sort by character code
+    for i in range(0, charList.len - 2)
+        for j in range(i + 1, charList.len - 1)
+            if charList[i].code > charList[j].code then
+                temp = charList[i]
+                charList[i] = charList[j]
+                charList[j] = temp
+            end if
+        end for
+    end for
+    
+    // Write each glyph
+    for c in charList
+        cd = self.chars[c]
+        
+        // Format label
+        label = formatLabel(cd.charCode, c)
+        if cd.hasIndex("yaffTag") then label = formatLabel(0, cd.yaffTag)
+        output.push label + ":"
+        
+        // Write bitmap or empty marker
+        if cd.width == 0 or cd.height == 0 then
+            output.push "    -"
+        else
+            bitmapLines = bitmapToLines(cd.colors, cd.width, cd.height)
+            for line in bitmapLines
+                output.push "    " + line
+            end for
+        end if
+        
+        // Calculate YAFF metrics from BMF metrics
+        leftBearing = cd.relX
+        rightBearing = cd.shift - cd.relX - cd.width
+        shiftUp = -(cd.relY + cd.height)
+        
+        // Write positioning properties (skip if standard for monospace)
+        if not isMonospace or leftBearing != 0 then
+            if leftBearing != 0 then
+                output.push "    left-bearing: " + leftBearing
+            end if
+        end if
+        
+        if not isMonospace or rightBearing != 0 then
+            if rightBearing != 0 then
+                output.push "    right-bearing: " + rightBearing
+            end if
+        end if
+        
+        if shiftUp != 0 then
+            output.push "    shift-up: " + shiftUp
+        end if
+        
+        // Write kerning for this character
+        if self.kernMap != null and self.kernMap.hasIndex(c) then
+            kernPairs = []
+            kernMap = self.kernMap[c]
+            for c2 in kernMap.keys
+                kernValue = kernMap[c2]
+                c2Label = formatLabel(c2.code, c2)
+                kernPairs.push c2Label + " " + kernValue
+            end for
+            if kernPairs.len > 0 then
+                output.push "    right-kerning: " + kernPairs.join(", ")
+            end if
+        end if
+        
+        // Blank line after each glyph
+        output.push ""
+    end for
+    
+    // Write to file
+    err = file.writeLines(path, output)
+    if err then
+        print "Font.saveYAFF: Error writing file: " + err
+        return err
+    end if
+    
+    print "Saved YAFF font with " + self.chars.len + " glyphs to " + path
+    return null
 end function
 
 // Font.save: Save this font to disk, in either version 1.1
