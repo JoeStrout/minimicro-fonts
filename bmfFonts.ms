@@ -1090,6 +1090,8 @@ Font.saveBMF = function(path)
 	lowCharCount = 0
 	highCharCount = 0
 	for c in self.chars.indexes
+		// Skip YAFF tags (charCode=0) - BMF doesn't support tags
+		if self.chars[c].charCode == 0 then continue
 		if c.code < 256 then lowCharCount = lowCharCount + 1 else highCharCount = highCharCount + 1
 	end for
 	if not self.hasIndex("usedColors") then self.usedColors = self.palette.len
@@ -1144,6 +1146,8 @@ Font.saveBMF = function(path)
 	
 	// write out the low characters (Unicode < 256) first
 	for c in self.chars.indexes
+		// Skip YAFF tags (charCode=0)
+		if self.chars[c].charCode == 0 then continue
 		if c.code > 255 then continue
 		p0 = data.pos
 		data.writeByte c.code
@@ -1155,6 +1159,8 @@ Font.saveBMF = function(path)
 		// write the high characters (Unicode > 255) next
 		data.writeUint highCharCount
 		for c in self.chars.indexes
+			// Skip YAFF tags (charCode=0)
+			if self.chars[c].charCode == 0 then continue
 			if c.code < 256 then continue
 			data.writeUint c.code
 			self.chars[c].save data, paletteMap, self.alphaBits
