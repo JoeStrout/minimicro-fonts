@@ -378,6 +378,7 @@ Font.loadYAFF = function(path)
 	f.alphaBits = 0
 	f.chars = {}
 	f.kernMap = null
+	f.aliases = null  // Maps CharData -> list of all character keys (for multi-label glyphs)
 	f.addSpace = 0
 	f.sizeInner = 0
 	f.usedColors = 1
@@ -430,11 +431,11 @@ Font.loadYAFF = function(path)
 			continue
 		end if
 		
-		// Parse label(s) before colon
+		// Parse label(s) - supports both comma-separated and multi-line indented
 		labelPart = line[:colonPos]
 		labels = []
 		
-		// Handle multiple labels separated by commas
+		// Handle multiple labels separated by commas on same line
 		if labelPart.indexOf(",") != null then
 			parts = labelPart.split(",")
 			for part in parts
@@ -446,19 +447,63 @@ Font.loadYAFF = function(path)
 			if labelInfo then labels.push labelInfo
 		end if
 		
+		lineNum = lineNum + 1
+		
+		// Check for additional label lines (multi-line indented format)
+		// Keep reading consecutive label lines until we hit an indented line (bitmap)
+		while lineNum < lines.len
+			nextLine = lines[lineNum]
+			// Skip blank lines and comments
+			if isBlank(nextLine) or isComment(nextLine) then
+				lineNum = lineNum + 1
+				continue
+			end if
+			// If indented, this is the start of bitmap/properties
+			if getIndent(nextLine) > 0 then break
+			// Check if this is another label line
+			nextColonPos = nextLine.indexOf(":")
+			if nextColonPos == null then break
+			// Parse this additional label
+			nextLabelPart = nextLine[:nextColonPos]
+			if nextLabelPart.indexOf(",") != null then
+				parts = nextLabelPart.split(",")
+				for part in parts
+					labelInfo = parseLabel(part, lineNum + 1)
+					if labelInfo then labels.push labelInfo
+				end for
+			else
+				labelInfo = parseLabel(nextLabelPart, lineNum + 1)
+				if labelInfo then labels.push labelInfo
+			end if
+			lineNum = lineNum + 1
+		end while
+		
 		if labels.len == 0 then
 			print "Font.loadYAFF: Malformed glyph label at line " + (lineNum + 1) + ": expected valid label"
 			return null
 		end if
 		
-		// Use first label only (TODO: support multi-label aliasing)
-		primaryLabel = labels[0]
-		if not primaryLabel or not primaryLabel.hasIndex("char") then
-			print "Font.loadYAFF: Invalid label structure at line " + (lineNum + 1) + ": " + str(primaryLabel)
-			return null
+		// Select canonical charCode: first numeric label (skip tags with code=0)
+		glyphCode = 0
+		glyphChar = null
+		for label in labels
+			if not label or not label.hasIndex("char") then continue
+			if label.code != 0 and glyphCode == 0 then
+				glyphCode = label.code
+				glyphChar = label.char
+				break
+			end if
+			end for
+		// If all labels are tags, use first tag
+		if glyphChar == null then
+			if labels[0] and labels[0].hasIndex("char") then
+				glyphChar = labels[0].char
+				glyphCode = 0
+			else
+				print "Font.loadYAFF: Invalid label structure at line " + (lineNum + 1)
+				return null
+			end if
 		end if
-		glyphChar = primaryLabel.char
-		glyphCode = primaryLabel.code
 		
 		lineNum = lineNum + 1
 		
@@ -652,8 +697,22 @@ Font.loadYAFF = function(path)
 			end for
 		end if
 		
-		// Store CharData in font
-		f.chars[glyphChar] = cd
+		// Store CharData under all labels (multi-label aliasing)
+		if labels.len > 1 then
+			// Multiple labels - initialize aliases map if needed
+			if f.aliases == null then f.aliases = {}
+			aliasList = []
+			for label in labels
+				if not label or not label.hasIndex("char") then continue
+				f.chars[label.char] = cd
+				aliasList.push label.char
+			end for
+			// Store reverse mapping: CharData -> list of all keys
+			f.aliases[cd] = aliasList
+		else
+			// Single label - store normally
+			f.chars[glyphChar] = cd
+		end if
 	end while
 	
 	// Calculate font-level metrics
@@ -959,29 +1018,35 @@ Font.saveYAFF = function(path)
         end for
     end for
     
-    // Write each glyph
-    for c in charList
-        cd = self.chars[c]
-        
-        // Format label
-        label = formatLabel(cd.charCode, c)
-        if cd.hasIndex("yaffTag") then label = formatLabel(0, cd.yaffTag)
-        output.push label + ":"
-        
-        // Write bitmap or empty marker
-        if cd.width == 0 or cd.height == 0 then
-            output.push "    -"
-        else
-            bitmapLines = bitmapToLines(cd.colors, cd.width, cd.height)
-            for line in bitmapLines
-                output.push "    " + line
-            end for
-        end if
-        
-        // Calculate YAFF metrics from BMF metrics
-        leftBearing = cd.relX
-        rightBearing = cd.shift - cd.relX - cd.width
-        shiftUp = -(cd.relY + cd.height)
+	// Track written CharData to avoid duplicates in multi-label case
+	writtenGlyphs = {}
+	
+	// Write each glyph
+	for c in charList
+		cd = self.chars[c]
+		
+		// Skip if already written (multi-label aliasing)
+		if writtenGlyphs.hasIndex(cd) then continue
+		writtenGlyphs[cd] = true
+		
+		// Format label(s) - check for aliases
+		if self.aliases != null and self.aliases.hasIndex(cd) then
+			// Multi-label glyph
+			labelParts = []
+			for aliasChar in self.aliases[cd]
+				aliasCd = self.chars[aliasChar]
+				if aliasCd.hasIndex("yaffTag") then
+					labelParts.push formatLabel(0, aliasCd.yaffTag)
+				else
+					labelParts.push formatLabel(aliasChar.code, aliasChar)
+				end if
+			end for
+			label = labelParts.join(", ")
+		else
+			// Single label
+			label = formatLabel(cd.charCode, c)
+			if cd.hasIndex("yaffTag") then label = formatLabel(0, cd.yaffTag)
+		end if
         
         // Write positioning properties (skip if standard for monospace)
         if not isMonospace or leftBearing != 0 then
