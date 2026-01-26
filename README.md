@@ -4,7 +4,7 @@ Bytemap screen font support for Mini Micro
 
 ## Purpose
 
-This repo provides code to read and render bitmap fonts in the "ByteMap Font" (BMF) format, as described here: https://bmf.php5.cz/?page=format
+This repo provides code to read and render bitmap fonts in the "ByteMap Font" (BMF) format, as described here: https://bmf.wz.cz/?page=format
 
 It also includes some sample font files that I believe to be in the public domain.  You can find thousands more at the web site above.
 

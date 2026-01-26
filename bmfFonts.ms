@@ -1,5 +1,5 @@
 // This module defines a Font class which can read fonts in BMF format
-// version 1.1 or 1.2.  Reference: https://bmf.php5.cz/index.php?page=format
+// version 1.1 or 1.2.  Reference: https://bmf.wz.cz/index.php?page=format
 //
 // Example of basic usage:
 //	 f = Font.load(fontFilePath)
@@ -402,7 +402,7 @@ Font.loadYAFF = function(path)
 	if firstGlyphLine < 0 then
 		// No glyphs, just return font with defaults
 		f.lineHeight = 12
-		f.sizeOver = 10
+		f.sizeOver = -10
 		f.sizeUnder = 2
 		return f
 	end if
@@ -653,7 +653,7 @@ Font.loadYAFF = function(path)
 		
 		// Calculate CharData positioning
 		cd.relX = leftBearing
-		cd.relY = -(shiftUp + cd.height)
+		cd.relY = shiftUp
 		
 		// Calculate shift (advance width) - will be refined after we know if monospace
 		cd.shift = leftBearing + cd.width + rightBearing
@@ -734,21 +734,21 @@ Font.loadYAFF = function(path)
 	end if
 	
 	if globalProps.hasIndex("ascent") then
-		f.sizeOver = globalProps["ascent"].val
-		if f.sizeOver == null then f.sizeOver = 10
+		f.sizeOver = -globalProps.ascent.val
+		if f.sizeOver == null then f.sizeOver = -10
 	else if allShiftUps.len > 0 and allHeights.len > 0 then
 		maxValue = 0
 		for i in range(0, allShiftUps.len - 1)
 			value = allShiftUps[i] + allHeights[i]
 			if value > maxValue then maxValue = value
 		end for
-		f.sizeOver = maxValue
+		f.sizeOver = -maxValue
 	else
-		f.sizeOver = 10
+		f.sizeOver = -10
 	end if
 	
 	if globalProps.hasIndex("descent") then
-		f.sizeUnder = globalProps["descent"].val
+		f.sizeUnder = globalProps.descent.val
 		if f.sizeUnder == null then f.sizeUnder = 2
 	else if allShiftUps.len > 0 then
 		minShift = 0
@@ -799,11 +799,11 @@ Font.loadBMF = function(path)
 	data.littleEndian = true
 	vers = data.byte(4)
 	f.version = floor(vers/16) + 0.1 * (vers % 16)
-	f.lineHeight = data.sbyte(5)
-	f.sizeOver = data.sbyte(6)
-	f.sizeUnder = data.sbyte(7)
-	f.addSpace = data.sbyte(8)
-	f.sizeInner = data.sbyte(9)
+	f.lineHeight = data.sbyte(5) // from highest to lowest reach; should be >= (sizeUnder - sizeOver)
+	f.sizeOver = data.sbyte(6)   // negative value, baseline to top of capital letters
+	f.sizeUnder = data.sbyte(7)  // positive or zero, baseline to lowest extends
+	f.addSpace = data.sbyte(8)   // extra space to add after each character (can be + or -)
+	f.sizeInner = data.sbyte(9)  // negative height of small letters
 	f.usedColors = data.byte(10)
 	f.highestUsedColor = data.byte(11)
 	f.alphaBits = 0
@@ -836,7 +836,7 @@ Font.loadBMF = function(path)
 		
 		f.chars[char(charData.charCode)] = charData
 	end for
-	if pos >= data.len then return f
+	if f.version < 1.2 or pos >= data.len then return f
 	
 	// Read non-ASCII characters
 	numOtherChars = data.uint(pos)
@@ -988,7 +988,7 @@ Font.saveYAFF = function(path)
         output.push "line-height: " + self.lineHeight
     end if
     if self.hasIndex("sizeOver") then
-        output.push "ascent: " + self.sizeOver
+        output.push "ascent: " + (-self.sizeOver)
     end if
     if self.hasIndex("sizeUnder") then
         output.push "descent: " + self.sizeUnder
@@ -1351,11 +1351,11 @@ Font.printChar = function(c, x=480, y=320, scale=1, tint="#FFFFFF")
 	x = x + d.relX
 	if d.hasIndex("image") and d.image != null then
 		if scale == 1 then
-			y = y - self.sizeOver - self.sizeUnder - d.relY - d.image.height
+			y = y - self.sizeOver - d.relY - d.image.height
 			gfx.drawImage d.image, x, y, d.image.width, d.image.height,
 			  0, 0, d.image.width, d.image.height, tint
 		else
-			y = y + scale * (-self.sizeOver - self.sizeUnder - d.relY - d.image.height)
+			y = y + scale * (-self.sizeOver - d.relY - d.image.height)
 			gfx.drawImage d.image, x, y, d.image.width*scale, d.image.height*scale,
 			  0, 0, d.image.width, d.image.height, tint
 		end if
@@ -1384,6 +1384,22 @@ end function
 Font.printRight = function(s, x=940, y=320, scale=1, tint="#FFFFFF")
 	s = str(s)
 	self.print s, x - self.width(s, scale), y, scale, tint
+end function
+
+// Print the given string to gfx, fully justified within the given width,
+// by inserting a little extra space between the words.
+Font.printJustified = function(s, x, y, width=500, scale=1, tint="#FFFFFF")
+    words = s.split
+    w = 0
+    for word in words; w += self.width(word, scale); end for
+    ew = width - w // ("extra width")
+    ewPerWord = floor(ew/(words.len-1))
+    for i in words.indexes
+        self.print words[i], x, y, scale, tint
+        if i == words.len-2 then ewPerWord = ew
+        x += self.width(words[i], scale) + ewPerWord
+        ew -= ewPerWord
+    end for
 end function
 
 // Return the width of the given string in this font.
@@ -1447,22 +1463,25 @@ demo = function()
 	end if
 	
 	y = 640
-	lastFont = null
 	fontFiles = file.children(fontsFolder)
 	fontFiles.sort
 	for fontFile in fontFiles
-		if fontFile[-4:] != ".bmf" then continue
+		if fontFile[-4:] != ".bmf" and fontFile[-5:] != ".yaff" then continue
 		f = Font.load(file.child(fontsFolder, fontFile))
 		if f == null then	continue
 		if y - f.lineHeight < 0 then
+			// scroll the gfx screen up (via image-copy)
 			dy = f.lineHeight + 4
 			gfx.drawImage gfx.getImage(0, 0, 960, 640-dy), 0, dy
 			gfx.fillRect 0, 0, 960, dy, color.black
 			y = y + dy
 		end if
-		f.print fontFile + ": " + f.title, 10, y + f.sizeOver
-		y = y - f.lineHeight - 4
-		lastFont = f
+		s = fontFile + ": " + f.title
+		w = f.width(s)
+		baseY = y + f.sizeOver
+		gfx.line 10, baseY, 10+w, baseY, "#FF00FF"
+		f.print s, 10, baseY
+		y -= f.lineHeight + 4
 	end for
 	text.row = 0
 	
