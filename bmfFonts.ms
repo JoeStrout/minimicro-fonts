@@ -113,6 +113,26 @@ splitByGrid = function(image, cellWidth=16, cellHeight=16, leftMargin=0, topMarg
 	return result
 end function
 
+// Inverse of splitByGrid: take a bunch of little (same-sized) images, and arrange
+// them into one big image with the given number of columns.
+makeGridImage = function(images, columns=16)
+	cellWidth = images[0].width
+	cellHeight = images[0].height
+	rows = ceil(images.len / columns)
+	imageWidth = cellWidth * columns
+	imageHeight = cellHeight * rows
+	tempG = new PixelDisplay
+	tempG.clear color.clear, imageWidth, imageHeight
+	for row in range(0, rows-1)
+		for col in range(0, columns-1)
+			i = row * columns + col
+			if i >= images.len then continue
+			tempG.drawImage images[i], col*cellWidth, imageHeight - (row+1)*cellHeight
+		end for
+	end for
+	return tempG.getImage
+end function
+
 // CharData class, storing data about just one character in a particular font.
 CharData = {}
 CharData._name = "bmfFonts.CharData";
@@ -1653,7 +1673,7 @@ demo = function
 		gfx.fillRect 0, 0, 960, dy, color.black
 	end function
 
-	y = 640
+	y = 640 - 24  // (to allow for scrolling at end of the fonts)
 	fontFiles = file.children(fontsFolder)
 	fontFiles.sort
 	for fontFile in fontFiles
@@ -1662,9 +1682,12 @@ demo = function
 		if fontFile == "AppleII_24x24.png" then
 			f = Font.loadImageGrid(path, 24, 24, "0-127", 2)
 			f.addSpace = -2  // push cells 2 pixels closer together for this font
-			globals.a2f = f
+		else if fontFile == "simple_6x8.png" then
+			f = Font.loadImageGrid(path, 6, 8, "' '-'}'", 1)
+		else if fontFile == "kromagrad_16x16.png" then
+			f = Font.loadImageGrid(path, 16, 16, "' '-'Z'", 1)
 		else if fontFile[-4:] == ".bmf" or fontFile[-5:] == ".yaff" then
-			f = Font.load(path)
+			//f = Font.load(path)
 		end if
 		if f == null then continue
 		if y - f.lineHeight < 0 then
