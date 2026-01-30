@@ -1687,7 +1687,7 @@ demo = function
 		else if fontFile == "kromagrad_16x16.png" then
 			f = Font.loadImageGrid(path, 16, 16, "' '-'Z'", 1)
 		else if fontFile[-4:] == ".bmf" or fontFile[-5:] == ".yaff" then
-			//f = Font.load(path)
+			f = Font.load(path)
 		end if
 		if f == null then continue
 		if y - f.lineHeight < 0 then
