@@ -6,6 +6,113 @@
 //	 w = f.width("Hello world!")
 //   f.print "Hello world!", 480 - w/2, 320
 
+// Helper function to expand a list description such as:
+//    1,3-5,null*2,12,'A'-'C'
+// into a full list such as:
+//    [1, 3, 4, 5, null, null, 12, 65, 66, 67]
+// Each element of the comma-delimited description string can be one of:
+//	- a number, e.g. 42
+//  - a Unicode (hexadecimal) value, e.g. U+2611
+//  - a range of numbers, e.g. 40-43
+//  - null (by itself, represents a single null entry)
+//  - null times a quantity, e.g. null*3 (represents three nulls)
+//  - a character in single quotes, e.g. 'A'
+//  - a range of characters, e.g. 'A'-'Z'
+//  - or even a range defined by a character and number, e.g. 'A'-127 or 32-'Z'
+//  Note that you can't represent the single-quote itself by putting it in single
+//  quotes; instead just use its Unicode value: 39.
+expandList = function(desc)
+	result = []	
+	rangeStarted = false
+	
+	reportError = function(msg)
+		st = stackTrace[:]
+		print "expandList error: " + msg + " at " + i
+		print desc
+		print " " * i + char(8593)  // (up-arrow)
+		print
+		for entry in st; print "- " + entry; end for
+		exit
+	end function
+	
+	addValue = function(value)
+		if rangeStarted then
+			if result.len == 0 or result[-1] == null then reportError "invalid range syntax"
+			outer.result += range(result.pop, value)
+			outer.rangeStarted = false
+		else
+			result.push value
+		end if
+	end function
+
+	i = -1
+	while i+1 < desc.len
+		i += 1
+		c = desc[i]
+		if c == " " then continue
+		if c == "'" then
+			// Character literal: must be a single character, followed by a close '
+			if i+2 >= desc.len or desc[i+2] != "'" then reportError "bad character syntax"
+			value = desc[i+1].code
+			addValue value
+			i += 2
+		else if "0" <= c <= "9" then
+			// Numeric literal
+			value = c.val
+			while i+1 < desc.len and "0" <= desc[i+1] <= "9"
+				i += 1
+				value = value * 10 + desc[i].val
+			end while
+			addValue value
+		else if c == "," then
+			// ToDo
+		else if c == "-" then
+			// Range indicator
+			rangeStarted = true
+		else if c == "n" and desc[i:i+4] == "null" then
+			// null
+			result.push null
+			i += 3
+		else if c == "U" or c == "u" then
+			// Unicode: U+ followed by a hex number
+			if i+2 >= desc.len or desc[i+1] != "+" then reportError "bad Unicode syntax"
+			hexStr = ""
+			i += 2
+			while i < desc.len and "0123456789abcdefABCDEF".indexOf(desc[i]) != null
+				hexStr += desc[i]
+				i += 1
+			end while
+			print "Got unicode: " + hexStr
+			addValue hexVal(hexStr)
+		else if c == "*" then
+			// after a star should be a number, then comma or EOL
+			commaPos = desc.indexOf(",", i)
+			if i == null then i = desc.len
+			count = desc[i+1:commaPos].val
+			result += [result[-1]] * (count - 1)
+			i = commaPos-1
+		end if
+	end while
+	return result
+end function
+
+
+// Helper method to cut an image up into a bunch of smaller images, by a regular grid.
+// Cells are assumed to be arranged in row order, starting at top left.
+splitByGrid = function(image, cellWidth=16, cellHeight=16, leftMargin=0, topMargin=0)
+	result = []
+	y = image.height - topMargin
+	while y - cellHeight >= 0
+		x = leftMargin
+		while x + cellWidth <= image.width
+			result.push image.getImage(x, y - cellHeight, cellWidth, cellHeight)
+			x += cellWidth
+		end while
+		y -= cellHeight
+	end while
+	return result
+end function
+
 // CharData class, storing data about just one character in a particular font.
 CharData = {}
 CharData._name = "bmfFonts.CharData";
@@ -35,6 +142,17 @@ CharData.load = function(data, pos)
 	end if
 	return pos + bytes
 end function
+
+CharData.FromImage = function(image, relX=0, relY=0, shift=null)
+	cd = new CharData
+	cd.image = image
+	cd.width = image.width
+	cd.height = image.height
+	cd.relX = relX
+	cd.relY = relY
+	if shift == null then cd.shift = image.width else cd.shift = shift
+	return cd
+end function	
 
 hexStrToInt = {}
 for i in range(0,255); hexStrToInt[hex2(i)] = i; end for
@@ -868,6 +986,57 @@ Font.loadBMF = function(path)
 	return f
 end function
 
+// Load a font from an image containing characters in a regular grid.
+// Specify the width and height of each character (cell), the baseline
+// (i.e. how many pixels of each cell should appear below the baseline),
+// and optionally, a left/top margin.  Also provide a list description
+// of the character code points found in the grid (see expandList).
+Font.loadImageGrid = function(imageOrPath, cellWidth=16, cellHeight=16, codePoints=null, baseLine=null, leftMargin=0, topMargin=0)
+	// baseLine: default to 1/4 of the cell height
+	if baseLine == null then baseLine = floor(cellHeight/4)
+	if imageOrPath isa string then imageOrPath = file.loadImage(imageOrPath)
+	if not imageOrPath isa Image then
+		print "Font.loadImageGrid: unable to load image"
+		return null
+	end if
+	cells = splitByGrid(imageOrPath, cellWidth, cellHeight, leftMargin, topMargin)
+	// codePoints: if not specified, assume characters starting at 32 (space)
+	if codePoints == null then
+		codePoints = range(32, 32+cells.len-1)
+	else if codePoints isa string then
+		codePoints = expandList(codePoints)
+	end if
+	if not codePoints isa list then
+		print "Font.loadImageGrid: expected list or list description for codePoints"
+		return null
+	end if
+	
+	f = new Font
+	f.version = 1.2
+	f.palette = ["#FFFFFF"]
+	f.alphaBits = 0
+	f.kernMap = null
+	f.title = imageOrPath.name - ".png"
+	f.chars = {}
+	f.aliases = null  // Maps CharData -> list of all character keys (for multi-label glyphs)
+	f.lineHeight = cellHeight
+	f.sizeOver = -cellHeight + baseLine
+	f.sizeUnder = baseLine
+	f.addSpace = 0
+	f.sizeInner = -cellHeight/2
+	f.usedColors = 1
+	f.highestUsedColor = 1
+	f.numPalettes = 1
+
+	for i in cells.indexes
+		if i >= codePoints.len then break
+		cd = CharData.FromImage(cells[i])
+		f.chars[char(codePoints[i])] = cd
+	end for
+	
+	return f
+end function
+
 Font.save = function(path)
 	ext = path.split(".")[-1].lower
 	if ext == "bmf" then
@@ -1449,9 +1618,26 @@ boxesSample = [
 " ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒",
 ]
 
+runUnitTests = function
+	check = function(actual, expected)
+		if actual == expected then return
+		print "Unit test failure."
+		print "Expected: " + expected
+		print "  Actual: " + actual
+		exit
+	end function
+
+	check expandList("'$', null, U+2611, '""', ',', '-', 39"),
+	  [36, null, 9745, 34, 44, 45, 39]
+	check expandList("1,3-5,null*2,12,'A'-'C'"),
+	  [1, 3, 4, 5, null, null, 12, 65, 66, 67]
+	check expandList("U+2191 - u+2194"),
+	  [8593, 8594, 8595, 8596]
+end function
+
 // Demo program: find the fonts directory, then load and display
 // every font found therein.
-demo = function()
+demo = function
 	clear; text.row = 10
 	
 	fontsFolder = "fonts"
@@ -1462,19 +1648,29 @@ demo = function()
 		return
 	end if
 	
+	scrollGfx = function(dy=1)
+		gfx.drawImage gfx.getImage(0, 0, 960, 640-dy), 0, dy
+		gfx.fillRect 0, 0, 960, dy, color.black
+	end function
+
 	y = 640
 	fontFiles = file.children(fontsFolder)
 	fontFiles.sort
 	for fontFile in fontFiles
-		if fontFile[-4:] != ".bmf" and fontFile[-5:] != ".yaff" then continue
-		f = Font.load(file.child(fontsFolder, fontFile))
-		if f == null then	continue
+		path = file.child(fontsFolder, fontFile)
+		f = null
+		if fontFile == "AppleII_24x24.png" then
+			f = Font.loadImageGrid(path, 24, 24, "0-127", 2)
+			f.addSpace = -2  // push cells 2 pixels closer together for this font
+			globals.a2f = f
+		else if fontFile[-4:] == ".bmf" or fontFile[-5:] == ".yaff" then
+			f = Font.load(path)
+		end if
+		if f == null then continue
 		if y - f.lineHeight < 0 then
-			// scroll the gfx screen up (via image-copy)
 			dy = f.lineHeight + 4
-			gfx.drawImage gfx.getImage(0, 0, 960, 640-dy), 0, dy
-			gfx.fillRect 0, 0, 960, dy, color.black
-			y = y + dy
+			scrollGfx dy
+			y += dy
 		end if
 		s = fontFile + ": " + f.title
 		w = f.width(s)
@@ -1483,6 +1679,7 @@ demo = function()
 		f.print s, 10, baseY
 		y -= f.lineHeight + 4
 	end for
+	scrollGfx 24
 	text.row = 0
 	
 	boxes = []
@@ -1511,4 +1708,7 @@ demo = function()
 	end for
 end function
 
-if locals == globals then demo
+if locals == globals then
+	runUnitTests
+	demo
+end if
