@@ -16,11 +16,10 @@
 //  - a range of numbers, e.g. 40-43
 //  - null (by itself, represents a single null entry)
 //  - null times a quantity, e.g. null*3 (represents three nulls)
-//  - a character in single quotes, e.g. 'A'
-//  - a range of characters, e.g. 'A'-'Z'
-//  - or even a range defined by a character and number, e.g. 'A'-127 or 32-'Z'
+//  - a character or charcters in single quotes, e.g. 'A' or '[]{}'
+//  - a range defined by two of the above separated by -, e.g. 'A'-127 or '0'-'9'
 //  Note that you can't represent the single-quote itself by putting it in single
-//  quotes; instead just use its Unicode value: 39.
+//  quotes; instead just use its Unicode value: 39.  (Double-quote is 34.)
 expandList = function(desc)
 	result = []	
 	rangeStarted = false
@@ -51,11 +50,12 @@ expandList = function(desc)
 		c = desc[i]
 		if c == " " then continue
 		if c == "'" then
-			// Character literal: must be a single character, followed by a close '
-			if i+2 >= desc.len or desc[i+2] != "'" then reportError "bad character syntax"
-			value = desc[i+1].code
-			addValue value
-			i += 2
+			// Character literal
+			i += 1
+			while i < desc.len and desc[i] != "'"
+				addValue desc[i].code
+				i += 1
+			end while
 		else if "0" <= c <= "9" then
 			// Numeric literal
 			value = c.val
@@ -1651,8 +1651,8 @@ runUnitTests = function
 	  [36, null, 9745, 34, 44, 45, 39]
 	check expandList("1,3-5,null*2,12,'A'-'C'"),
 	  [1, 3, 4, 5, null, null, 12, 65, 66, 67]
-	check expandList("U+2191 - u+2194"),
-	  [8593, 8594, 8595, 8596]
+	check expandList("U+2191 - u+2194"), [8593, 8594, 8595, 8596]
+	check expandList("'ABC'"), [65, 66, 67]
 end function
 
 // Demo program: find the fonts directory, then load and display
@@ -1682,6 +1682,10 @@ demo = function
 		if fontFile == "AppleII_24x24.png" then
 			f = Font.loadImageGrid(path, 24, 24, "0-127", 2)
 			f.addSpace = -2  // push cells 2 pixels closer together for this font
+		else if fontFile == "boldround_13x23.png" then
+			f = Font.loadImageGrid(path, 13, 23, 
+			  "'A'-'Z', 'a'-'z', '0'-'9', '+-()[]{}<>/*:#%!?.,', 39, 34, '@&$ '", 6)
+			globals.bf = f
 		else if fontFile == "simple_6x8.png" then
 			f = Font.loadImageGrid(path, 6, 8, "' '-'}'", 1)
 		else if fontFile == "kromagrad_16x16.png" then
